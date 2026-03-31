@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>McPath</title>
+  <style>
+    body { margin: 0; }
+  </style>
+</head>
+<body>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
+  <script>
+// ================= SCENE =================
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87CEEB);
+
+// Camera
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 2000);
+
+// Renderer
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// Lighting
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(50, 100, 50);
+scene.add(light);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+
+// Ground
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(2000, 2000),
+  new THREE.MeshStandardMaterial({ color: 0x228B22 })
+);
+ground.rotation.x = -Math.PI/2;
+ground.position.y = -2;
+scene.add(ground);
+
+// ================= TRACK =================
+
+// Silverstone-style points (scaled)
+const scale = 5;
+const rawPoints = [
+  [0,0],[20,10],[40,30],[80,60],[60,120],[20,160],
+  [-20,150],[-50,140],[-90,130],[-140,120],
+  [-150,60],[-130,20],[-100,30],[-60,80],
+  [-20,110],[0,80],[5,40],[0,0]
+];
+
+const trackPoints = rawPoints.map(p => 
+  new THREE.Vector3(p[0]*scale, 0, p[1]*scale)
+);
+
+const curve = new THREE.CatmullRomCurve3(trackPoints, true);
+
+// Road (tube = smooth track)
+const roadGeo = new THREE.TubeGeometry(curve, 400, 5, 12, true);
+const roadMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+const road = new THREE.Mesh(roadGeo, roadMat);
+scene.add(road);
+
+// ================= CAR =================
+
+const car = new THREE.Mesh(
+  new THREE.BoxGeometry(1, 1, 2),
+  new THREE.MeshStandardMaterial({ color: 0xff0000 })
+);
+car.position.set(0, 1, 0);
+scene.add(car);
+
+// ================= CONTROLS =================
+
+let keys = {};
+document.addEventListener("keydown", e => keys[e.key] = true);
+document.addEventListener("keyup", e => keys[e.key] = false);
+
+// Physics
+let speed = 0;
+let maxSpeed = 1.2;
+let accel = 0.03;
+let friction = 0.96;
+let turnSpeed = 0.04;
+
+// ================= LOOP =================
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  // Movement
+  if (keys["ArrowUp"]) speed += accel;
+  if (keys["ArrowDown"]) speed -= accel;
+
+  speed *= friction;
+  speed = Math.max(-0.5, Math.min(maxSpeed, speed));
+
+  // Steering
+  if (keys["ArrowLeft"]) car.rotation.y += turnSpeed;
+  if (keys["ArrowRight"]) car.rotation.y -= turnSpeed;
+
+  // Move forward
+  car.position.x -= Math.sin(car.rotation.y) * speed;
+  car.position.z -= Math.cos(car.rotation.y) * speed;
+
+  // Keep car on track height
+  car.position.y = 1;
+
+  // ================= CAMERA FOLLOW =================
+  const camDistance = 10;
+  const camHeight = 5;
+
+  const targetX = car.position.x + Math.sin(car.rotation.y) * camDistance;
+  const targetZ = car.position.z + Math.cos(car.rotation.y) * camDistance;
+
+  camera.position.x += (targetX - camera.position.x) * 0.1;
+  camera.position.y += (car.position.y + camHeight - camera.position.y) * 0.1;
+  camera.position.z += (targetZ - camera.position.z) * 0.1;
+
+  camera.lookAt(car.position);
+
+  renderer.render(scene, camera);
+}
+
+animate();
+
+// Resize fix
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+  </script>
+</body>
+</html>
