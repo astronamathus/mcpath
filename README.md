@@ -14,19 +14,6 @@ A browser-based 3D racing prototype built with **Three.js**, inspired by real-wo
 
 ---
 
-## Controls
-
-### Driving
-
-| Key      | Action          |
-| -------- | --------------- |
-| ⬆️ Arrow | Accelerate      |
-| ⬇️ Arrow | Brake / Reverse |
-| ⬅️ Arrow | Turn Left       |
-| ➡️ Arrow | Turn Right      |
-
----
-
 ### Setup (Plug & Play)
 
 Some browsers restrict features (like pointer lock), so run a local server:
@@ -103,15 +90,3 @@ Pull requests are welcome
 This project is open-source and available under the MIT License.
 
 ---
-
-## 💡 Author
-
-Built as a learning project exploring:
-
-* 3D game development in the browser
-* Real-time rendering
-* Racing game mechanics
-
----
-
-Enjoy driving 🏁
