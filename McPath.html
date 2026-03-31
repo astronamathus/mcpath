@@ -34,7 +34,6 @@ ground.rotation.x = -Math.PI/2;
 scene.add(ground);
 
 // ================= TRACK =================
-
 const scale = 5;
 const rawPoints = [
   [0,0],[20,10],[40,30],[80,60],[60,120],[20,160],
@@ -54,44 +53,51 @@ const roadMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
 const road = new THREE.Mesh(roadGeo, roadMat);
 scene.add(road);
 
-// ================= FREE CAMERA CONTROLS =================
+// ================= CAR =================
+const car = new THREE.Mesh(
+  new THREE.BoxGeometry(1, 1, 2),
+  new THREE.MeshStandardMaterial({ color: 0xff0000 })
+);
+car.position.set(0, 1, 0);
+scene.add(car);
 
+// ================= FREE CAMERA CONTROLS =================
+let freeLookEnabled = false; // toggle with T
 let yaw = 0;
 let pitch = 0;
 
-let moveForward = false;
-let moveBackward = false;
-let moveLeft = false;
-let moveRight = false;
-
+let keys = {};
 let flyUp = false;
 let flyDown = false;
 
-const speed = 0.5;
-const verticalSpeed = 0.4;
+// Keyboard
+document.addEventListener("keydown", (e) => {
+  keys[e.key.toLowerCase()] = true;
 
-// Lock pointer on click
-document.body.addEventListener("click", () => {
-  document.body.requestPointerLock();
+  // Toggle free-look
+  if (e.key.toLowerCase() === "t") freeLookEnabled = !freeLookEnabled;
 });
+
+document.addEventListener("keyup", (e) => keys[e.key.toLowerCase()] = false);
 
 // Mouse look
 document.addEventListener("mousemove", (e) => {
-  if (document.pointerLockElement === document.body) {
+  if (freeLookEnabled && document.pointerLockElement === document.body) {
     yaw -= e.movementX * 0.002;
     pitch -= e.movementY * 0.002;
-
     pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
   }
 });
 
 // Mouse buttons
 document.addEventListener("mousedown", (e) => {
-  if (e.button === 0) flyUp = true;     // left click
-  if (e.button === 2) flyDown = true;   // right click
+  if (!freeLookEnabled) return;
+  if (e.button === 0) flyUp = true;
+  if (e.button === 2) flyDown = true;
 });
 
 document.addEventListener("mouseup", (e) => {
+  if (!freeLookEnabled) return;
   if (e.button === 0) flyUp = false;
   if (e.button === 2) flyDown = false;
 });
@@ -99,66 +105,74 @@ document.addEventListener("mouseup", (e) => {
 // Disable right-click menu
 document.addEventListener("contextmenu", e => e.preventDefault());
 
-// Keyboard movement
-document.addEventListener("keydown", (e) => {
-  if (e.key === "w" || e.key === "ArrowUp") moveForward = true;
-  if (e.key === "s" || e.key === "ArrowDown") moveBackward = true;
-  if (e.key === "a" || e.key === "ArrowLeft") moveLeft = true;
-  if (e.key === "d" || e.key === "ArrowRight") moveRight = true;
-});
-
-document.addEventListener("keyup", (e) => {
-  if (e.key === "w" || e.key === "ArrowUp") moveForward = false;
-  if (e.key === "s" || e.key === "ArrowDown") moveBackward = false;
-  if (e.key === "a" || e.key === "ArrowLeft") moveLeft = false;
-  if (e.key === "d" || e.key === "ArrowRight") moveRight = false;
-});
-
 // ================= LOOP =================
-
 function animate() {
   requestAnimationFrame(animate);
 
-  // Apply rotation
-  camera.rotation.order = "YXZ";
-  camera.rotation.y = yaw;
-  camera.rotation.x = pitch;
+  // Driving car controls
+  let moveSpeed = 0.5;
+  let turnSpeed = 0.04;
+  if (!freeLookEnabled) {
+    // arrow keys control car
+    if (keys["arrowup"]) car.position.x -= Math.sin(car.rotation.y)*moveSpeed;
+    if (keys["arrowup"]) car.position.z -= Math.cos(car.rotation.y)*moveSpeed;
+    if (keys["arrowdown"]) car.position.x += Math.sin(car.rotation.y)*moveSpeed;
+    if (keys["arrowdown"]) car.position.z += Math.cos(car.rotation.y)*moveSpeed;
+    if (keys["arrowleft"]) car.rotation.y += turnSpeed;
+    if (keys["arrowright"]) car.rotation.y -= turnSpeed;
+  }
 
-  // Direction vectors
-  const forward = new THREE.Vector3(
-    -Math.sin(yaw),
-    0,
-    -Math.cos(yaw)
-  );
+  // Free-look camera
+  if (freeLookEnabled) {
+    camera.rotation.order = "YXZ";
+    camera.rotation.y = yaw;
+    camera.rotation.x = pitch;
 
-  const right = new THREE.Vector3(
-    Math.cos(yaw),
-    0,
-    -Math.sin(yaw)
-  );
+    // Direction vectors
+    const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+    const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
 
-  // Movement
-  if (moveForward) camera.position.add(forward.clone().multiplyScalar(speed));
-  if (moveBackward) camera.position.add(forward.clone().multiplyScalar(-speed));
-  if (moveLeft) camera.position.add(right.clone().multiplyScalar(-speed));
-  if (moveRight) camera.position.add(right.clone().multiplyScalar(speed));
+    const speed = 0.5;
+    const verticalSpeed = 0.4;
 
-  // Vertical
-  if (flyUp) camera.position.y += verticalSpeed;
-  if (flyDown) camera.position.y -= verticalSpeed;
+    if (keys["w"]) camera.position.add(forward.clone().multiplyScalar(speed));
+    if (keys["s"]) camera.position.add(forward.clone().multiplyScalar(-speed));
+    if (keys["a"]) camera.position.add(right.clone().multiplyScalar(-speed));
+    if (keys["d"]) camera.position.add(right.clone().multiplyScalar(speed));
+
+    if (flyUp) camera.position.y += verticalSpeed;
+    if (flyDown) camera.position.y -= verticalSpeed;
+  } else {
+    // Camera follows car
+    const camDistance = 10;
+    const camHeight = 5;
+
+    const targetX = car.position.x + Math.sin(car.rotation.y) * camDistance;
+    const targetZ = car.position.z + Math.cos(car.rotation.y) * camDistance;
+
+    camera.position.x += (targetX - camera.position.x) * 0.1;
+    camera.position.y += (car.position.y + camHeight - camera.position.y) * 0.1;
+    camera.position.z += (targetZ - camera.position.z) * 0.1;
+
+    camera.lookAt(car.position);
+  }
 
   renderer.render(scene, camera);
 }
 
 animate();
 
-// Resize fix
+// Pointer lock to enable mouse-look
+document.body.addEventListener("click", () => {
+  if (freeLookEnabled) document.body.requestPointerLock();
+});
+
+// Resize
 window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
-
   </script>
 </body>
 </html>
