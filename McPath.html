@@ -4,11 +4,9 @@
   <title>McPath - Silverstone Mini</title>
   <style>
     body { margin: 0; overflow: hidden; background: #000; }
-    #ui { position: absolute; top: 10; left: 10; color: white; font-family: sans-serif; pointer-events: none; }
   </style>
 </head>
 <body>
-<div id="ui">Use Arrows to Drive | Silverstone GP Layout</div>
 <script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
 <script>
 
@@ -16,47 +14,49 @@
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 3000);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 5000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.5));
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
 dirLight.position.set(100, 200, 50);
 scene.add(dirLight);
 
 // ================= TRACK GEOMETRY =================
 const scale = 8;
-// Simplified Silverstone GP Coordinates
 const rawPoints = [
-  [0, 0],       // Hamilton Straight
-  [40, 0],      // Abbey & Farm
-  [60, 20],     // Village
-  [40, 40],     // The Loop
-  [10, 35],     // Aintree
-  [-40, 35],    // Wellington Straight
-  [-70, 60],    // Brooklands
-  [-85, 40],    // Luffield
-  [-80, 10],    // Woodcote
-  [-40, 0],     // Copse
-  [-10, 40],    // Maggots
-  [20, 70],     // Becketts
-  [40, 90],     // Chapel
-  [100, 110],   // Hangar Straight
-  [150, 80],    // Stowe
-  [140, 20],    // Vale
-  [110, 0],     // Club
-  [0, 0]        // Back to Finish
+  [0, 0], [40, 0], [60, 20], [40, 40], [10, 35], [-40, 35], 
+  [-70, 60], [-85, 40], [-80, 10], [-40, 0], [-10, 40], 
+  [20, 70], [40, 90], [100, 110], [150, 80], [140, 20], [110, 0], [0, 0]
 ];
 
 const points = rawPoints.map(p => new THREE.Vector3(p[0] * scale, 0, p[1] * scale));
 const curve = new THREE.CatmullRomCurve3(points, true);
 
-function createTrackMesh(width, color, offsetHeight) {
-  const segments = 600;
+// Create a procedural stripe texture for the kerbs
+function createKerbTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 2;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 2, 64);
+  ctx.fillStyle = '#ff0000';
+  ctx.fillRect(0, 64, 2, 64);
+  
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(1, 100); // Adjust for stripe density
+  return tex;
+}
+
+function createTrackMesh(width, material, offsetHeight) {
+  const segments = 800; // Increased for smoother curves
   const positions = [];
-  const colors = [];
+  const uvs = [];
   const indices = [];
 
   for (let i = 0; i <= segments; i++) {
@@ -69,12 +69,7 @@ function createTrackMesh(width, color, offsetHeight) {
     const right = p.clone().add(norm.clone().multiplyScalar(-width / 2));
 
     positions.push(left.x, offsetHeight, left.z, right.x, offsetHeight, right.z);
-
-    // Checkerboard color for curbs if this is the curb mesh
-    if (width > 15) { 
-      const c = Math.floor(t * 100) % 2 === 0 ? new THREE.Color(0xffffff) : new THREE.Color(0xff0000);
-      colors.push(c.r, c.g, c.b, c.r, c.g, c.b);
-    }
+    uvs.push(0, t, 1, t);
   }
 
   for (let i = 0; i < segments; i++) {
@@ -84,51 +79,53 @@ function createTrackMesh(width, color, offsetHeight) {
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  if (colors.length) geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   geo.setIndex(indices);
-  
-  return new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ 
-    color: colors.length ? 0xffffff : color, 
-    vertexColors: colors.length > 0,
-    side: THREE.DoubleSide 
-  }));
+  geo.computeVertexNormals();
+
+  return new THREE.Mesh(geo, material);
 }
 
 // Ground
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshStandardMaterial({ color: 0x228B22 }));
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), new THREE.MeshStandardMaterial({ color: 0x1a5e1a }));
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
 
-// Main Road and Curbs
-const road = createTrackMesh(14, 0x333333, 0.1);
-const curbs = createTrackMesh(16, 0xffffff, 0.05);
-scene.add(road, curbs);
+// Asphalt
+const roadMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
+const road = createTrackMesh(14, roadMat, 0.1);
+
+// Nicer Kerbs
+const kerbMat = new THREE.MeshStandardMaterial({ 
+  map: createKerbTexture(),
+  roughness: 0.5 
+});
+const kerbs = createTrackMesh(16, kerbMat, 0.08);
+
+scene.add(road, kerbs);
 
 // ================= CAR SETUP =================
 const carGroup = new THREE.Group();
-const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 2.5), new THREE.MeshStandardMaterial({ color: 0xff0000 }));
+const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 2.5), new THREE.MeshStandardMaterial({ color: 0xe10600 }));
 body.position.y = 0.5;
 carGroup.add(body);
 
-// Wheels
-const wheelGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.4, 12);
-const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
-const wheelPositions = [[0.7,0.3,0.8], [-0.7,0.3,0.8], [0.7,0.3,-0.8], [-0.7,0.3,-0.8]];
-wheelPositions.forEach(pos => {
+const wheelGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.4, 16);
+const wheelMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
+[[0.7,0.3,0.8], [-0.7,0.3,0.8], [0.7,0.3,-0.8], [-0.7,0.3,-0.8]].forEach(pos => {
   const w = new THREE.Mesh(wheelGeo, wheelMat);
   w.rotation.z = Math.PI/2;
   w.position.set(...pos);
   carGroup.add(w);
 });
-
 scene.add(carGroup);
 
 // ================= PHYSICS & INPUT =================
 let keys = {};
 let velocity = 0;
 let rotationSpeed = 0;
-const friction = 0.98;
-const acceleration = 0.03;
+const friction = 0.985;
+const acceleration = 0.04;
 
 document.addEventListener("keydown", (e) => keys[e.key.toLowerCase()] = true);
 document.addEventListener("keyup", (e) => keys[e.key.toLowerCase()] = false);
@@ -136,25 +133,23 @@ document.addEventListener("keyup", (e) => keys[e.key.toLowerCase()] = false);
 function animate() {
   requestAnimationFrame(animate);
 
-  // Driving Physics
-  if (keys["arrowup"]) velocity += acceleration;
-  if (keys["arrowdown"]) velocity -= acceleration;
-  
+  if (keys["arrowup"] || keys["w"]) velocity += acceleration;
+  if (keys["arrowdown"] || keys["s"]) velocity -= acceleration;
+
   velocity *= friction;
-  
+
   if (Math.abs(velocity) > 0.01) {
-    if (keys["arrowleft"]) rotationSpeed += 0.005;
-    if (keys["arrowright"]) rotationSpeed -= 0.005;
+    const steerDir = (keys["arrowleft"] || keys["a"]) ? 1 : (keys["arrowright"] || keys["d"]) ? -1 : 0;
+    rotationSpeed += steerDir * 0.006;
   }
-  
-  rotationSpeed *= 0.9;
-  carGroup.rotation.y += rotationSpeed * (velocity * 0.5);
+
+  rotationSpeed *= 0.85;
+  carGroup.rotation.y += rotationSpeed * (velocity * 0.4);
 
   carGroup.position.x -= Math.sin(carGroup.rotation.y) * velocity;
   carGroup.position.z -= Math.cos(carGroup.rotation.y) * velocity;
 
-  // Camera Follow
-  const relativeCameraOffset = new THREE.Vector3(0, 7, 15);
+  const relativeCameraOffset = new THREE.Vector3(0, 6, 12);
   const cameraOffset = relativeCameraOffset.applyMatrix4(carGroup.matrixWorld);
   camera.position.lerp(cameraOffset, 0.1);
   camera.lookAt(carGroup.position);
