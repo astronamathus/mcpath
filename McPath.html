@@ -1,166 +1,171 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>McPath - Real Road</title>
+  <title>McPath - Silverstone Mini</title>
   <style>
-    body { margin: 0; overflow: hidden; }
+    body { margin: 0; overflow: hidden; background: #000; }
+    #ui { position: absolute; top: 10; left: 10; color: white; font-family: sans-serif; pointer-events: none; }
   </style>
 </head>
 <body>
+<div id="ui">Use Arrows to Drive | Silverstone GP Layout</div>
 <script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
 <script>
 
-// ================= SCENE =================
+// ================= SCENE SETUP =================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 2000);
-camera.position.set(0, 5, 10);
-
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 3000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-dirLight.position.set(50, 100, -50);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(100, 200, 50);
 scene.add(dirLight);
 
-// Ground
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(2000, 2000),
-  new THREE.MeshStandardMaterial({ color: 0x228B22 })
-);
-ground.rotation.x = -Math.PI/2;
-scene.add(ground);
-
-// ================= TRACK =================
-const scale = 5;
+// ================= TRACK GEOMETRY =================
+const scale = 8;
+// Simplified Silverstone GP Coordinates
 const rawPoints = [
-  [0,0],[20,10],[40,30],[80,60],[60,120],[20,160],
-  [-20,150],[-50,140],[-90,130],[-140,120],
-  [-150,60],[-130,20],[-100,30],[-60,80],
-  [-20,110],[0,80],[5,40],[0,0]
+  [0, 0],       // Hamilton Straight
+  [40, 0],      // Abbey & Farm
+  [60, 20],     // Village
+  [40, 40],     // The Loop
+  [10, 35],     // Aintree
+  [-40, 35],    // Wellington Straight
+  [-70, 60],    // Brooklands
+  [-85, 40],    // Luffield
+  [-80, 10],    // Woodcote
+  [-40, 0],     // Copse
+  [-10, 40],    // Maggots
+  [20, 70],     // Becketts
+  [40, 90],     // Chapel
+  [100, 110],   // Hangar Straight
+  [150, 80],    // Stowe
+  [140, 20],    // Vale
+  [110, 0],     // Club
+  [0, 0]        // Back to Finish
 ];
 
-const points = rawPoints.map(p => new THREE.Vector3(p[0]*scale, 0, p[1]*scale));
+const points = rawPoints.map(p => new THREE.Vector3(p[0] * scale, 0, p[1] * scale));
 const curve = new THREE.CatmullRomCurve3(points, true);
 
-// ================= ROAD =================
-const roadWidth = 14;
-const segments = 400;
+function createTrackMesh(width, color, offsetHeight) {
+  const segments = 600;
+  const positions = [];
+  const colors = [];
+  const indices = [];
 
-const positions = [];
-const indices = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const p = curve.getPointAt(t);
+    const tan = curve.getTangentAt(t);
+    const norm = new THREE.Vector3(-tan.z, 0, tan.x).normalize();
 
-for (let i = 0; i < segments; i++) {
-  const t1 = i / segments;
-  const t2 = (i + 1) / segments;
+    const left = p.clone().add(norm.clone().multiplyScalar(width / 2));
+    const right = p.clone().add(norm.clone().multiplyScalar(-width / 2));
 
-  const p1 = curve.getPointAt(t1);
-  const p2 = curve.getPointAt(t2);
+    positions.push(left.x, offsetHeight, left.z, right.x, offsetHeight, right.z);
 
-  const tan1 = curve.getTangentAt(t1);
-  const tan2 = curve.getTangentAt(t2);
+    // Checkerboard color for curbs if this is the curb mesh
+    if (width > 15) { 
+      const c = Math.floor(t * 100) % 2 === 0 ? new THREE.Color(0xffffff) : new THREE.Color(0xff0000);
+      colors.push(c.r, c.g, c.b, c.r, c.g, c.b);
+    }
+  }
 
-  const n1 = new THREE.Vector3(-tan1.z, 0, tan1.x).normalize();
-  const n2 = new THREE.Vector3(-tan2.z, 0, tan2.x).normalize();
+  for (let i = 0; i < segments; i++) {
+    const base = i * 2;
+    indices.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+  }
 
-  const l1 = p1.clone().add(n1.clone().multiplyScalar(roadWidth / 2));
-  const r1 = p1.clone().add(n1.clone().multiplyScalar(-roadWidth / 2));
-
-  const l2 = p2.clone().add(n2.clone().multiplyScalar(roadWidth / 2));
-  const r2 = p2.clone().add(n2.clone().multiplyScalar(-roadWidth / 2));
-
-  // lift slightly
-  l1.y = r1.y = l2.y = r2.y = 0.05;
-
-  const base = positions.length / 3;
-
-  positions.push(
-    l1.x, l1.y, l1.z,
-    r1.x, r1.y, r1.z,
-    l2.x, l2.y, l2.z,
-    r2.x, r2.y, r2.z
-  );
-
-  // TWO TRIANGLES (correct winding)
-  indices.push(
-    base, base+1, base+2,
-    base+1, base+3, base+2
-  );
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  if (colors.length) geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geo.setIndex(indices);
+  
+  return new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ 
+    color: colors.length ? 0xffffff : color, 
+    vertexColors: colors.length > 0,
+    side: THREE.DoubleSide 
+  }));
 }
 
-const geometry = new THREE.BufferGeometry();
-geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-geometry.setIndex(indices);
-geometry.computeVertexNormals();
-geometry.computeBoundingSphere(); // important fix
+// Ground
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshStandardMaterial({ color: 0x228B22 }));
+ground.rotation.x = -Math.PI / 2;
+scene.add(ground);
 
-const road = new THREE.Mesh(
-  geometry,
-  new THREE.MeshStandardMaterial({
-    color: 0x333333,
-    side: THREE.DoubleSide // critical fix
-  })
-);
+// Main Road and Curbs
+const road = createTrackMesh(14, 0x333333, 0.1);
+const curbs = createTrackMesh(16, 0xffffff, 0.05);
+scene.add(road, curbs);
 
-scene.add(road);
+// ================= CAR SETUP =================
+const carGroup = new THREE.Group();
+const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 2.5), new THREE.MeshStandardMaterial({ color: 0xff0000 }));
+body.position.y = 0.5;
+carGroup.add(body);
 
-// ================= CAR =================
-const car = new THREE.Mesh(
-  new THREE.BoxGeometry(1, 1, 2),
-  new THREE.MeshStandardMaterial({ color:0xff0000 })
-);
+// Wheels
+const wheelGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.4, 12);
+const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+const wheelPositions = [[0.7,0.3,0.8], [-0.7,0.3,0.8], [0.7,0.3,-0.8], [-0.7,0.3,-0.8]];
+wheelPositions.forEach(pos => {
+  const w = new THREE.Mesh(wheelGeo, wheelMat);
+  w.rotation.z = Math.PI/2;
+  w.position.set(...pos);
+  carGroup.add(w);
+});
 
-car.position.set(0, 0.3, 0);
-scene.add(car);
+scene.add(carGroup);
 
-// ================= CONTROLS =================
+// ================= PHYSICS & INPUT =================
 let keys = {};
-document.addEventListener("keydown",(e)=>keys[e.key.toLowerCase()] = true);
-document.addEventListener("keyup",(e)=>keys[e.key.toLowerCase()] = false);
+let velocity = 0;
+let rotationSpeed = 0;
+const friction = 0.98;
+const acceleration = 0.03;
 
-// ================= ANIMATION =================
-function animate(){
+document.addEventListener("keydown", (e) => keys[e.key.toLowerCase()] = true);
+document.addEventListener("keyup", (e) => keys[e.key.toLowerCase()] = false);
+
+function animate() {
   requestAnimationFrame(animate);
 
-  const speed = 0.6;
-  const turn = 0.04;
-
-  if(keys["arrowup"]){
-    car.position.x -= Math.sin(car.rotation.y)*speed;
-    car.position.z -= Math.cos(car.rotation.y)*speed;
+  // Driving Physics
+  if (keys["arrowup"]) velocity += acceleration;
+  if (keys["arrowdown"]) velocity -= acceleration;
+  
+  velocity *= friction;
+  
+  if (Math.abs(velocity) > 0.01) {
+    if (keys["arrowleft"]) rotationSpeed += 0.005;
+    if (keys["arrowright"]) rotationSpeed -= 0.005;
   }
-  if(keys["arrowdown"]){
-    car.position.x += Math.sin(car.rotation.y)*speed;
-    car.position.z += Math.cos(car.rotation.y)*speed;
-  }
-  if(keys["arrowleft"]) car.rotation.y += turn;
-  if(keys["arrowright"]) car.rotation.y -= turn;
+  
+  rotationSpeed *= 0.9;
+  carGroup.rotation.y += rotationSpeed * (velocity * 0.5);
 
-  car.position.y = 0.3;
+  carGroup.position.x -= Math.sin(carGroup.rotation.y) * velocity;
+  carGroup.position.z -= Math.cos(carGroup.rotation.y) * velocity;
 
-  // Camera follow
-  const dist = 12, height = 6;
-
-  const tx = car.position.x + Math.sin(car.rotation.y)*dist;
-  const tz = car.position.z + Math.cos(car.rotation.y)*dist;
-
-  camera.position.x += (tx - camera.position.x)*0.1;
-  camera.position.y += (car.position.y + height - camera.position.y)*0.1;
-  camera.position.z += (tz - camera.position.z)*0.1;
-
-  camera.lookAt(car.position);
+  // Camera Follow
+  const relativeCameraOffset = new THREE.Vector3(0, 7, 15);
+  const cameraOffset = relativeCameraOffset.applyMatrix4(carGroup.matrixWorld);
+  camera.position.lerp(cameraOffset, 0.1);
+  camera.lookAt(carGroup.position);
 
   renderer.render(scene, camera);
 }
 
 animate();
 
-// Resize
-window.addEventListener("resize",()=>{
-  camera.aspect = window.innerWidth/window.innerHeight;
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
@@ -168,4 +173,3 @@ window.addEventListener("resize",()=>{
 </script>
 </body>
 </html>
-```
