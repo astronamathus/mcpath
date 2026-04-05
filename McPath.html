@@ -1,170 +1,266 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>McPath - Silverstone Mini</title>
-  <style>
-    body { margin: 0; overflow: hidden; background: #000; }
-  </style>
+  <title>McPath</title>
+  <title>McPath - Real Road</title>
+<style>
+    body { margin: 0; }
+    body { margin: 0; overflow: hidden; }
+</style>
 </head>
 <body>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
+  <script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
 <script>
 
-// ================= SCENE SETUP =================
+// ================= SCENE =================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 5000);
+// Camera
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 2000);
+camera.position.set(0, 5, 10);
+
+// Renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.5));
-const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-dirLight.position.set(100, 200, 50);
+// Lighting
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+dirLight.position.set(50, 100, -50);
 scene.add(dirLight);
 
-// ================= TRACK GEOMETRY =================
-const scale = 8;
-const rawPoints = [
-  [0, 0], [40, 0], [60, 20], [40, 40], [10, 35], [-40, 35], 
-  [-70, 60], [-85, 40], [-80, 10], [-40, 0], [-10, 40], 
-  [20, 70], [40, 90], [100, 110], [150, 80], [140, 20], [110, 0], [0, 0]
+// Ground
+const ground = new THREE.Mesh(
+@@ -42,137 +43,129 @@
+[-20,110],[0,80],[5,40],[0,0]
 ];
 
-const points = rawPoints.map(p => new THREE.Vector3(p[0] * scale, 0, p[1] * scale));
+const trackPoints = rawPoints.map(p => 
+  new THREE.Vector3(p[0]*scale, 0, p[1]*scale)
+);
+const points = rawPoints.map(p => new THREE.Vector3(p[0]*scale, 0, p[1]*scale));
 const curve = new THREE.CatmullRomCurve3(points, true);
 
-// Create a procedural stripe texture for the kerbs
-function createKerbTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 2;
-  canvas.height = 128;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, 2, 64);
-  ctx.fillStyle = '#ff0000';
-  ctx.fillRect(0, 64, 2, 64);
-  
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(1, 100); // Adjust for stripe density
-  return tex;
-}
+const curve = new THREE.CatmullRomCurve3(trackPoints, true);
+// ================= ROAD =================
+const roadWidth = 14;
+const segments = 400;
 
-function createTrackMesh(width, material, offsetHeight) {
-  const segments = 800; // Increased for smoother curves
-  const positions = [];
-  const uvs = [];
-  const indices = [];
+const roadGeo = new THREE.TubeGeometry(curve, 400, 5, 12, true);
+const roadMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+const road = new THREE.Mesh(roadGeo, roadMat);
+scene.add(road);
+const positions = [];
+const indices = [];
 
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
-    const p = curve.getPointAt(t);
-    const tan = curve.getTangentAt(t);
-    const norm = new THREE.Vector3(-tan.z, 0, tan.x).normalize();
+// ================= CAR =================
+const car = new THREE.Mesh(
+  new THREE.BoxGeometry(1, 1, 2),
+  new THREE.MeshStandardMaterial({ color: 0xff0000 })
+);
+car.position.set(0, 1, 0);
+scene.add(car);
+for (let i = 0; i < segments; i++) {
+  const t1 = i / segments;
+  const t2 = (i + 1) / segments;
 
-    const left = p.clone().add(norm.clone().multiplyScalar(width / 2));
-    const right = p.clone().add(norm.clone().multiplyScalar(-width / 2));
+// ================= FREE CAMERA CONTROLS =================
+let freeLookEnabled = false; // toggle with T
+let yaw = 0;
+let pitch = 0;
+  const p1 = curve.getPointAt(t1);
+  const p2 = curve.getPointAt(t2);
 
-    positions.push(left.x, offsetHeight, left.z, right.x, offsetHeight, right.z);
-    uvs.push(0, t, 1, t);
-  }
-
-  for (let i = 0; i < segments; i++) {
-    const base = i * 2;
-    indices.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geo.setIndex(indices);
-  geo.computeVertexNormals();
-
-  return new THREE.Mesh(geo, material);
-}
-
-// Ground
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), new THREE.MeshStandardMaterial({ color: 0x1a5e1a }));
-ground.rotation.x = -Math.PI / 2;
-scene.add(ground);
-
-// Asphalt
-const roadMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
-const road = createTrackMesh(14, roadMat, 0.1);
-
-// Nicer Kerbs
-const kerbMat = new THREE.MeshStandardMaterial({ 
-  map: createKerbTexture(),
-  roughness: 0.5 
-});
-const kerbs = createTrackMesh(16, kerbMat, 0.08);
-
-scene.add(road, kerbs);
-
-// ================= CAR SETUP =================
-const carGroup = new THREE.Group();
-const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 2.5), new THREE.MeshStandardMaterial({ color: 0xe10600 }));
-body.position.y = 0.5;
-carGroup.add(body);
-
-const wheelGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.4, 16);
-const wheelMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
-[[0.7,0.3,0.8], [-0.7,0.3,0.8], [0.7,0.3,-0.8], [-0.7,0.3,-0.8]].forEach(pos => {
-  const w = new THREE.Mesh(wheelGeo, wheelMat);
-  w.rotation.z = Math.PI/2;
-  w.position.set(...pos);
-  carGroup.add(w);
-});
-scene.add(carGroup);
-
-// ================= PHYSICS & INPUT =================
 let keys = {};
-let velocity = 0;
-let rotationSpeed = 0;
-const friction = 0.985;
-const acceleration = 0.04;
+let flyUp = false;
+let flyDown = false;
+  const tan1 = curve.getTangentAt(t1);
+  const tan2 = curve.getTangentAt(t2);
 
-document.addEventListener("keydown", (e) => keys[e.key.toLowerCase()] = true);
+// Keyboard
+document.addEventListener("keydown", (e) => {
+  keys[e.key.toLowerCase()] = true;
+  const n1 = new THREE.Vector3(-tan1.z, 0, tan1.x).normalize();
+  const n2 = new THREE.Vector3(-tan2.z, 0, tan2.x).normalize();
+
+  // Toggle free-look
+  if (e.key.toLowerCase() === "t") freeLookEnabled = !freeLookEnabled;
+});
+  const l1 = p1.clone().add(n1.clone().multiplyScalar(roadWidth / 2));
+  const r1 = p1.clone().add(n1.clone().multiplyScalar(-roadWidth / 2));
+
 document.addEventListener("keyup", (e) => keys[e.key.toLowerCase()] = false);
+  const l2 = p2.clone().add(n2.clone().multiplyScalar(roadWidth / 2));
+  const r2 = p2.clone().add(n2.clone().multiplyScalar(-roadWidth / 2));
 
+// Mouse look
+document.addEventListener("mousemove", (e) => {
+  if (freeLookEnabled && document.pointerLockElement === document.body) {
+    yaw -= e.movementX * 0.002;
+    pitch -= e.movementY * 0.002;
+    pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+  }
+});
+  // lift slightly
+  l1.y = r1.y = l2.y = r2.y = 0.05;
+
+// Mouse buttons
+document.addEventListener("mousedown", (e) => {
+  if (!freeLookEnabled) return;
+  if (e.button === 0) flyUp = true;
+  if (e.button === 2) flyDown = true;
+});
+  const base = positions.length / 3;
+
+document.addEventListener("mouseup", (e) => {
+  if (!freeLookEnabled) return;
+  if (e.button === 0) flyUp = false;
+  if (e.button === 2) flyDown = false;
+});
+  positions.push(
+    l1.x, l1.y, l1.z,
+    r1.x, r1.y, r1.z,
+    l2.x, l2.y, l2.z,
+    r2.x, r2.y, r2.z
+  );
+
+// Disable right-click menu
+document.addEventListener("contextmenu", e => e.preventDefault());
+  // TWO TRIANGLES (correct winding)
+  indices.push(
+    base, base+1, base+2,
+    base+1, base+3, base+2
+  );
+}
+
+// ================= LOOP =================
 function animate() {
   requestAnimationFrame(animate);
+const geometry = new THREE.BufferGeometry();
+geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+geometry.setIndex(indices);
+geometry.computeVertexNormals();
+geometry.computeBoundingSphere(); // important fix
 
-  if (keys["arrowup"] || keys["w"]) velocity += acceleration;
-  if (keys["arrowdown"] || keys["s"]) velocity -= acceleration;
+const road = new THREE.Mesh(
+  geometry,
+  new THREE.MeshStandardMaterial({
+    color: 0x333333,
+    side: THREE.DoubleSide // critical fix
+  })
+);
 
-  velocity *= friction;
-
-  if (Math.abs(velocity) > 0.01) {
-    const steerDir = (keys["arrowleft"] || keys["a"]) ? 1 : (keys["arrowright"] || keys["d"]) ? -1 : 0;
-    rotationSpeed += steerDir * 0.006;
+  // Driving car controls
+  let moveSpeed = 0.5;
+  let turnSpeed = 0.04;
+  if (!freeLookEnabled) {
+    // arrow keys control car
+    if (keys["arrowup"]) car.position.x -= Math.sin(car.rotation.y)*moveSpeed;
+    if (keys["arrowup"]) car.position.z -= Math.cos(car.rotation.y)*moveSpeed;
+    if (keys["arrowdown"]) car.position.x += Math.sin(car.rotation.y)*moveSpeed;
+    if (keys["arrowdown"]) car.position.z += Math.cos(car.rotation.y)*moveSpeed;
+    if (keys["arrowleft"]) car.rotation.y += turnSpeed;
+    if (keys["arrowright"]) car.rotation.y -= turnSpeed;
   }
+scene.add(road);
 
-  rotationSpeed *= 0.85;
-  carGroup.rotation.y += rotationSpeed * (velocity * 0.4);
+  // Free-look camera
+  if (freeLookEnabled) {
+    camera.rotation.order = "YXZ";
+    camera.rotation.y = yaw;
+    camera.rotation.x = pitch;
+// ================= CAR =================
+const car = new THREE.Mesh(
+  new THREE.BoxGeometry(1, 1, 2),
+  new THREE.MeshStandardMaterial({ color:0xff0000 })
+);
 
-  carGroup.position.x -= Math.sin(carGroup.rotation.y) * velocity;
-  carGroup.position.z -= Math.cos(carGroup.rotation.y) * velocity;
+    // Direction vectors
+    const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+    const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+car.position.set(0, 0.3, 0);
+scene.add(car);
 
-  const relativeCameraOffset = new THREE.Vector3(0, 6, 12);
-  const cameraOffset = relativeCameraOffset.applyMatrix4(carGroup.matrixWorld);
-  camera.position.lerp(cameraOffset, 0.1);
-  camera.lookAt(carGroup.position);
+    const speed = 0.5;
+    const verticalSpeed = 0.4;
+// ================= CONTROLS =================
+let keys = {};
+document.addEventListener("keydown",(e)=>keys[e.key.toLowerCase()] = true);
+document.addEventListener("keyup",(e)=>keys[e.key.toLowerCase()] = false);
 
-  renderer.render(scene, camera);
+    if (keys["w"]) camera.position.add(forward.clone().multiplyScalar(speed));
+    if (keys["s"]) camera.position.add(forward.clone().multiplyScalar(-speed));
+    if (keys["a"]) camera.position.add(right.clone().multiplyScalar(-speed));
+    if (keys["d"]) camera.position.add(right.clone().multiplyScalar(speed));
+// ================= ANIMATION =================
+function animate(){
+  requestAnimationFrame(animate);
+
+    if (flyUp) camera.position.y += verticalSpeed;
+    if (flyDown) camera.position.y -= verticalSpeed;
+  } else {
+    // Camera follows car
+    const camDistance = 10;
+    const camHeight = 5;
+  const speed = 0.6;
+  const turn = 0.04;
+
+    const targetX = car.position.x + Math.sin(car.rotation.y) * camDistance;
+    const targetZ = car.position.z + Math.cos(car.rotation.y) * camDistance;
+  if(keys["arrowup"]){
+    car.position.x -= Math.sin(car.rotation.y)*speed;
+    car.position.z -= Math.cos(car.rotation.y)*speed;
+  }
+  if(keys["arrowdown"]){
+    car.position.x += Math.sin(car.rotation.y)*speed;
+    car.position.z += Math.cos(car.rotation.y)*speed;
+  }
+  if(keys["arrowleft"]) car.rotation.y += turn;
+  if(keys["arrowright"]) car.rotation.y -= turn;
+
+    camera.position.x += (targetX - camera.position.x) * 0.1;
+    camera.position.y += (car.position.y + camHeight - camera.position.y) * 0.1;
+    camera.position.z += (targetZ - camera.position.z) * 0.1;
+  car.position.y = 0.3;
+
+    camera.lookAt(car.position);
+  }
+  // Camera follow
+  const dist = 12, height = 6;
+
+  const tx = car.position.x + Math.sin(car.rotation.y)*dist;
+  const tz = car.position.z + Math.cos(car.rotation.y)*dist;
+
+  camera.position.x += (tx - camera.position.x)*0.1;
+  camera.position.y += (car.position.y + height - camera.position.y)*0.1;
+  camera.position.z += (tz - camera.position.z)*0.1;
+
+  camera.lookAt(car.position);
+
+renderer.render(scene, camera);
 }
 
 animate();
 
-window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+// Pointer lock to enable mouse-look
+document.body.addEventListener("click", () => {
+  if (freeLookEnabled) document.body.requestPointerLock();
 });
+
+// Resize
+window.addEventListener("resize", () => {
+window.addEventListener("resize",()=>{
+camera.aspect = window.innerWidth/window.innerHeight;
+camera.updateProjectionMatrix();
+renderer.setSize(window.innerWidth, window.innerHeight);
+});
+  </script>
 
 </script>
 </body>
 </html>
+```
