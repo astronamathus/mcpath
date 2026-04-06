@@ -152,6 +152,7 @@ function animate(){
   // clamp so turning never becomes zero
   turnFactor = Math.max(minTurnFactor, turnFactor);
 
+  //Fix turning mechanism
   const actualTurn = baseTurn * turnFactor;
 
   if(velocity !== 0){
