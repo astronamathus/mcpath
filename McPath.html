@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>McPath</title>
+  <title>McPath - Real Road</title>
   <style>
     body { margin: 0; overflow: hidden; }
   </style>
@@ -125,7 +125,9 @@ const maxSpeed = 2.5;
 const reverseSpeed = -1.5;
 const acceleration = 0.05;
 const friction = 0.98;
-const turn = 0.04;
+
+const baseTurn = 0.04;
+const minTurnFactor = 0.25; // prevents zero turning
 
 // ================= ANIMATION =================
 function animate(){
@@ -141,13 +143,20 @@ function animate(){
   // FRICTION
   velocity *= friction;
 
-  // STOP SMALL DRIFT
   if(Math.abs(velocity) < 0.001) velocity = 0;
 
-  // TURNING (depends on speed)
+  // SPEED-BASED TURN REDUCTION
+  const speedRatio = Math.abs(velocity) / maxSpeed;
+  let turnFactor = 1 - speedRatio;
+
+  // clamp so turning never becomes zero
+  turnFactor = Math.max(minTurnFactor, turnFactor);
+
+  const actualTurn = baseTurn * turnFactor;
+
   if(velocity !== 0){
-    if(keys["arrowleft"]) car.rotation.y += turn * (velocity * 0.5);
-    if(keys["arrowright"]) car.rotation.y -= turn * (velocity * 0.5);
+    if(keys["arrowleft"]) car.rotation.y += actualTurn;
+    if(keys["arrowright"]) car.rotation.y -= actualTurn;
   }
 
   // MOVE
