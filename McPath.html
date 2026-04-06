@@ -2,15 +2,11 @@
 <html>
 <head>
   <title>McPath</title>
-  <title>McPath - Real Road</title>
-<style>
-    body { margin: 0; }
+  <style>
     body { margin: 0; overflow: hidden; }
-</style>
+  </style>
 </head>
 <body>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
-  <script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
 <script>
 
@@ -18,109 +14,68 @@
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
 
-// Camera
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 2000);
 camera.position.set(0, 5, 10);
 
-// Renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// Lighting
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
 const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
 dirLight.position.set(50, 100, -50);
 scene.add(dirLight);
 
-// Ground
+// ================= GROUND =================
 const ground = new THREE.Mesh(
-@@ -42,137 +43,129 @@
-[-20,110],[0,80],[5,40],[0,0]
+  new THREE.PlaneGeometry(2000, 2000),
+  new THREE.MeshStandardMaterial({ color: 0x228B22 })
+);
+ground.rotation.x = -Math.PI/2;
+scene.add(ground);
+
+// ================= TRACK =================
+const scale = 5;
+const rawPoints = [
+  [0,0],[20,10],[40,30],[80,60],[60,120],[20,160],
+  [-20,150],[-50,140],[-90,130],[-140,120],
+  [-150,60],[-130,20],[-100,30],[-60,80],
+  [-20,110],[0,80],[5,40],[0,0]
 ];
 
-const trackPoints = rawPoints.map(p => 
-  new THREE.Vector3(p[0]*scale, 0, p[1]*scale)
-);
 const points = rawPoints.map(p => new THREE.Vector3(p[0]*scale, 0, p[1]*scale));
 const curve = new THREE.CatmullRomCurve3(points, true);
 
-const curve = new THREE.CatmullRomCurve3(trackPoints, true);
 // ================= ROAD =================
 const roadWidth = 14;
 const segments = 400;
 
-const roadGeo = new THREE.TubeGeometry(curve, 400, 5, 12, true);
-const roadMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
-const road = new THREE.Mesh(roadGeo, roadMat);
-scene.add(road);
 const positions = [];
 const indices = [];
 
-// ================= CAR =================
-const car = new THREE.Mesh(
-  new THREE.BoxGeometry(1, 1, 2),
-  new THREE.MeshStandardMaterial({ color: 0xff0000 })
-);
-car.position.set(0, 1, 0);
-scene.add(car);
 for (let i = 0; i < segments; i++) {
   const t1 = i / segments;
   const t2 = (i + 1) / segments;
 
-// ================= FREE CAMERA CONTROLS =================
-let freeLookEnabled = false; // toggle with T
-let yaw = 0;
-let pitch = 0;
   const p1 = curve.getPointAt(t1);
   const p2 = curve.getPointAt(t2);
 
-let keys = {};
-let flyUp = false;
-let flyDown = false;
   const tan1 = curve.getTangentAt(t1);
   const tan2 = curve.getTangentAt(t2);
 
-// Keyboard
-document.addEventListener("keydown", (e) => {
-  keys[e.key.toLowerCase()] = true;
   const n1 = new THREE.Vector3(-tan1.z, 0, tan1.x).normalize();
   const n2 = new THREE.Vector3(-tan2.z, 0, tan2.x).normalize();
 
-  // Toggle free-look
-  if (e.key.toLowerCase() === "t") freeLookEnabled = !freeLookEnabled;
-});
   const l1 = p1.clone().add(n1.clone().multiplyScalar(roadWidth / 2));
   const r1 = p1.clone().add(n1.clone().multiplyScalar(-roadWidth / 2));
 
-document.addEventListener("keyup", (e) => keys[e.key.toLowerCase()] = false);
   const l2 = p2.clone().add(n2.clone().multiplyScalar(roadWidth / 2));
   const r2 = p2.clone().add(n2.clone().multiplyScalar(-roadWidth / 2));
 
-// Mouse look
-document.addEventListener("mousemove", (e) => {
-  if (freeLookEnabled && document.pointerLockElement === document.body) {
-    yaw -= e.movementX * 0.002;
-    pitch -= e.movementY * 0.002;
-    pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
-  }
-});
-  // lift slightly
   l1.y = r1.y = l2.y = r2.y = 0.05;
 
-// Mouse buttons
-document.addEventListener("mousedown", (e) => {
-  if (!freeLookEnabled) return;
-  if (e.button === 0) flyUp = true;
-  if (e.button === 2) flyDown = true;
-});
   const base = positions.length / 3;
 
-document.addEventListener("mouseup", (e) => {
-  if (!freeLookEnabled) return;
-  if (e.button === 0) flyUp = false;
-  if (e.button === 2) flyDown = false;
-});
   positions.push(
     l1.x, l1.y, l1.z,
     r1.x, r1.y, r1.z,
@@ -128,110 +83,82 @@ document.addEventListener("mouseup", (e) => {
     r2.x, r2.y, r2.z
   );
 
-// Disable right-click menu
-document.addEventListener("contextmenu", e => e.preventDefault());
-  // TWO TRIANGLES (correct winding)
   indices.push(
     base, base+1, base+2,
     base+1, base+3, base+2
   );
 }
 
-// ================= LOOP =================
-function animate() {
-  requestAnimationFrame(animate);
 const geometry = new THREE.BufferGeometry();
 geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
 geometry.setIndex(indices);
 geometry.computeVertexNormals();
-geometry.computeBoundingSphere(); // important fix
+geometry.computeBoundingSphere();
 
 const road = new THREE.Mesh(
   geometry,
   new THREE.MeshStandardMaterial({
     color: 0x333333,
-    side: THREE.DoubleSide // critical fix
+    side: THREE.DoubleSide
   })
 );
 
-  // Driving car controls
-  let moveSpeed = 0.5;
-  let turnSpeed = 0.04;
-  if (!freeLookEnabled) {
-    // arrow keys control car
-    if (keys["arrowup"]) car.position.x -= Math.sin(car.rotation.y)*moveSpeed;
-    if (keys["arrowup"]) car.position.z -= Math.cos(car.rotation.y)*moveSpeed;
-    if (keys["arrowdown"]) car.position.x += Math.sin(car.rotation.y)*moveSpeed;
-    if (keys["arrowdown"]) car.position.z += Math.cos(car.rotation.y)*moveSpeed;
-    if (keys["arrowleft"]) car.rotation.y += turnSpeed;
-    if (keys["arrowright"]) car.rotation.y -= turnSpeed;
-  }
 scene.add(road);
 
-  // Free-look camera
-  if (freeLookEnabled) {
-    camera.rotation.order = "YXZ";
-    camera.rotation.y = yaw;
-    camera.rotation.x = pitch;
 // ================= CAR =================
 const car = new THREE.Mesh(
   new THREE.BoxGeometry(1, 1, 2),
   new THREE.MeshStandardMaterial({ color:0xff0000 })
 );
 
-    // Direction vectors
-    const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-    const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
 car.position.set(0, 0.3, 0);
 scene.add(car);
 
-    const speed = 0.5;
-    const verticalSpeed = 0.4;
 // ================= CONTROLS =================
 let keys = {};
 document.addEventListener("keydown",(e)=>keys[e.key.toLowerCase()] = true);
 document.addEventListener("keyup",(e)=>keys[e.key.toLowerCase()] = false);
 
-    if (keys["w"]) camera.position.add(forward.clone().multiplyScalar(speed));
-    if (keys["s"]) camera.position.add(forward.clone().multiplyScalar(-speed));
-    if (keys["a"]) camera.position.add(right.clone().multiplyScalar(-speed));
-    if (keys["d"]) camera.position.add(right.clone().multiplyScalar(speed));
+// ================= PHYSICS =================
+let velocity = 0;
+const maxSpeed = 2.5;
+const reverseSpeed = -1.5;
+const acceleration = 0.05;
+const friction = 0.98;
+const turn = 0.04;
+
 // ================= ANIMATION =================
 function animate(){
   requestAnimationFrame(animate);
 
-    if (flyUp) camera.position.y += verticalSpeed;
-    if (flyDown) camera.position.y -= verticalSpeed;
-  } else {
-    // Camera follows car
-    const camDistance = 10;
-    const camHeight = 5;
-  const speed = 0.6;
-  const turn = 0.04;
+  // ACCELERATION
+  if(keys["arrowup"]) velocity += acceleration;
+  if(keys["arrowdown"]) velocity -= acceleration;
 
-    const targetX = car.position.x + Math.sin(car.rotation.y) * camDistance;
-    const targetZ = car.position.z + Math.cos(car.rotation.y) * camDistance;
-  if(keys["arrowup"]){
-    car.position.x -= Math.sin(car.rotation.y)*speed;
-    car.position.z -= Math.cos(car.rotation.y)*speed;
-  }
-  if(keys["arrowdown"]){
-    car.position.x += Math.sin(car.rotation.y)*speed;
-    car.position.z += Math.cos(car.rotation.y)*speed;
-  }
-  if(keys["arrowleft"]) car.rotation.y += turn;
-  if(keys["arrowright"]) car.rotation.y -= turn;
+  // CLAMP SPEED
+  velocity = Math.min(maxSpeed, Math.max(reverseSpeed, velocity));
 
-    camera.position.x += (targetX - camera.position.x) * 0.1;
-    camera.position.y += (car.position.y + camHeight - camera.position.y) * 0.1;
-    camera.position.z += (targetZ - camera.position.z) * 0.1;
+  // FRICTION
+  velocity *= friction;
+
+  // STOP SMALL DRIFT
+  if(Math.abs(velocity) < 0.001) velocity = 0;
+
+  // TURNING (depends on speed)
+  if(velocity !== 0){
+    if(keys["arrowleft"]) car.rotation.y += turn * (velocity * 0.5);
+    if(keys["arrowright"]) car.rotation.y -= turn * (velocity * 0.5);
+  }
+
+  // MOVE
+  car.position.x -= Math.sin(car.rotation.y) * velocity;
+  car.position.z -= Math.cos(car.rotation.y) * velocity;
   car.position.y = 0.3;
 
-    camera.lookAt(car.position);
-  }
-  // Camera follow
-  const dist = 12, height = 6;
-  // Match in XY plane
+  // CAMERA FOLLOW
+  const dist = 12;
+  const height = 6;
+
   const tx = car.position.x + Math.sin(car.rotation.y)*dist;
   const tz = car.position.z + Math.cos(car.rotation.y)*dist;
 
@@ -241,26 +168,18 @@ function animate(){
 
   camera.lookAt(car.position);
 
-renderer.render(scene, camera);
+  renderer.render(scene, camera);
 }
 
 animate();
 
-// Pointer lock to enable mouse-look
-document.body.addEventListener("click", () => {
-  if (freeLookEnabled) document.body.requestPointerLock();
-});
-
-// Resize
-window.addEventListener("resize", () => {
+// ================= RESIZE =================
 window.addEventListener("resize",()=>{
-camera.aspect = window.innerWidth/window.innerHeight;
-camera.updateProjectionMatrix();
-renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
 });
-  </script>
 
 </script>
 </body>
 </html>
-```
