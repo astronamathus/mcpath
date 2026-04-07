@@ -1,193 +1,250 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>McPath - Real Road</title>
+  <title>McPath</title>
   <style>
-    body { margin: 0; overflow: hidden; }
+    body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+    #ui {
+      position: absolute; top: 10px; left: 10px; color: white;
+      background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
+<div id="ui">
+  <b>T</b>: Toggle Free Cam | <b>WASD</b>: Move | <b>Mouse</b>: Look<br>
+  <b>Left Click</b>: Up | <b>Right Click</b>: Down
+</div>
 <script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
 <script>
 
-// ================= SCENE =================
+// ================= SCENE SETUP =================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 2000);
-camera.position.set(0, 5, 10);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 5000);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-dirLight.position.set(50, 100, -50);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(500, 1000, 500);
 scene.add(dirLight);
+
+// ================= GEOGRAPHIC PROJECTION =================
+function project(lon, lat, centerLon, centerLat) {
+    const radius = 6378137;
+    const x = radius * (lon - centerLon) * (Math.PI / 180) * Math.cos(centerLat * Math.PI / 180);
+    const z = radius * (lat - centerLat) * (Math.PI / 180);
+    return { x, z };
+}
+
+// ================= TRACK DATA =================
+const kmlCoords = "-1.022711843137816,52.06892916884821,0 -1.022543821848504,52.06906688047263,0 -1.022378841158485,52.06919652217074,0 -1.022045835191539,52.06946387455488,0 -1.021379811294514,52.06999857650789,0 -1.020047715645912,52.0710679691522,0 -1.019941137193568,52.07113710549655,0 -1.019872174451242,52.07117533588469,0 -1.019790572751295,52.07121284223464,0 -1.019687898061005,52.07124725759785,0 -1.019586843496618,52.07128013933243,0 -1.019470103858152,52.07130417076701,0 -1.019302019095754,52.07132754814102,0 -1.019186590988931,52.07132834087349,0 -1.018763076781927,52.07132288745139,0 -1.018402781163047,52.07130394656378,0 -1.017968501494061,52.07126078674791,0 -1.017343633136264,52.07121540413361,0 -1.016963304957373,52.07120591551762,0 -1.016676177653361,52.07120752763051,0 -1.016437512216027,52.07123639894527,0 -1.015953895601932,52.07136295353253,0 -1.015509370187704,52.07156219526161,0 -1.015008767093226,52.07181849306329,0 -1.014381891970675,52.07213987416185,0 -1.014020302343694,52.07232616453279,0 -1.013738284394431,52.07245115893418,0 -1.013571558140038,52.07251061087687,0 -1.013391887119737,52.07252301831785,0 -1.013302309592221,52.07251852364098,0 -1.013191848012908,52.07250018634856,0 -1.013128353395734,52.07247769815491,0 -1.013093331467296,52.07245373575303,0 -1.013042853339319,52.07239273132191,0 -1.012909903871024,52.07211497039278,0 -1.012752669877759,52.07179117874326,0 -1.012700269651031,52.07169511787234,0 -1.012650343042304,52.07159138341352,0 -1.012575520332336,52.07150902359619,0 -1.012443102887107,52.07143872642602,0 -1.012321054787251,52.07142144374695,0 -1.012207493443532,52.07141544197531,0 -1.012137118932693,52.0714255576308,0 -1.012056392887445,52.07145606535417,0 -1.011971380624895,52.07150989044806,0 -1.011899377019507,52.07160583073239,0 -1.011661344291879,52.07197848181689,0 -1.011523907588141,52.0723879153871,0 -1.011466190478909,52.0726566773243,0 -1.011456823476395,52.07288177228693,0 -1.011503242849371,52.07302979245897,0 -1.011592448591194,52.07314013146756,0 -1.011658057469914,52.07320672855661,0 -1.013943646783715,52.07449182465562,0 -1.016373226849587,52.07583500256612,0 -1.018289103309756,52.07691186347927,0 -1.018584150793351,52.0770389978051,0 -1.018769486026851,52.07709766017301,0 -1.019071587470013,52.07714329685435,0 -1.019194033821331,52.07714258299188,0 -1.019354394050966,52.07713308546425,0 -1.019531633699644,52.07711190607985,0 -1.019721016841353,52.07708495992556,0 -1.019884061865974,52.07702567509704,0 -1.020005824492106,52.07693183974374,0 -1.020052855102812,52.07683503240868,0 -1.020152570370445,52.076289291461,0 -1.020187978976762,52.07617571580898,0 -1.020253534870146,52.076089094878,0 -1.020293878531747,52.07603721595142,0 -1.020357120341626,52.07598669105293,0 -1.020443556805792,52.07592781156124,0 -1.020555177890118,52.07587256255955,0 -1.020722154675426,52.0758319172051,0 -1.020940357859478,52.0758186733425,0 -1.021078851272855,52.0758252604252,0 -1.021194883869846,52.07584981205439,0 -1.021318679304499,52.07587570275009,0 -1.021396605690074,52.07590884694746,0 -1.021464464609088,52.07594827381282,0 -1.021515936974837,52.07599307220902,0 -1.021572481375739,52.07603729016547,0 -1.021608912908299,52.07607656935186,0 -1.021628192752001,52.07611127861735,0 -1.021648116981477,52.07615748790958,0 -1.021680818058244,52.07622379131984,0 -1.021678545088781,52.07626382811617,0 -1.021668654432987,52.07633287818101,0 -1.021648646788036,52.07640805025028,0 -1.021606813672025,52.0764789095779,0 -1.021535277852197,52.07658977236952,0 -1.021450382680325,52.07671647414897,0 -1.021377573075559,52.07681713930854,0 -1.021063499999333,52.0772065273502,0 -1.020917781731371,52.07739601031775,0 -1.020800344980297,52.07753623080916,0 -1.020747848287714,52.0775825859881,0 -1.020671618238121,52.07764538891394,0 -1.020566917911963,52.07774074842019,0 -1.020429842982755,52.07783666528307,0 -1.020228016946052,52.07797604632798,0 -1.020008404991211,52.07810154336652,0 -1.01990883452332,52.07816048091318,0 -1.019710292243983,52.07825472369363,0 -1.019529322317199,52.07833666103325,0 -1.019320605318814,52.07842158058226,0 -1.019113153003588,52.07848743399514,0 -1.01890922779352,52.07853624477741,0 -1.018705167354403,52.0785737791524,0 -1.018539407419266,52.07860180689707,0 -1.018297556397646,52.07862746351157,0 -1.01786639301383,52.07865735391881,0 -1.017135797406897,52.07870411096239,0 -1.015182024194222,52.07881723285923,0 -1.013986751819286,52.0788786258669,0 -1.012597704914328,52.07893962829216,0 -1.012456495203243,52.07894032414308,0 -1.012212545302253,52.07893736504715,0 -1.012109132428209,52.0789209879805,0 -1.011993586288433,52.07890345665868,0 -1.011876373664646,52.07888325499225,0 -1.0117925672848,52.07886023173118,0 -1.011685658276874,52.07882292103463,0 -1.011576349647366,52.07877372717901,0 -1.011463711977695,52.07871498450707,0 -1.011378407395237,52.07866040720668,0 -1.011297548448479,52.07858805280264,0 -1.011231679781648,52.07850970083312,0 -1.011182336440994,52.0784215821505,0 -1.011103855465626,52.0782910352393,0 -1.010991949433165,52.0780977203144,0 -1.010913152985069,52.07793560521412,0 -1.010783281595307,52.07767951891431,0 -1.010638157452294,52.07734771384395,0 -1.010514330360384,52.0769943989033,0 -1.010402122180586,52.07662019082863,0 -1.010337983330265,52.0760981000912,0 -1.010309380411951,52.07572139389717,0 -1.010257881428134,52.0750676795035,0 -1.010229573398823,52.07467760838338,0 -1.010205636748811,52.07449107105271,0 -1.010179585121955,52.07438536585984,0 -1.0101436879623,52.07432692413659,0 -1.010077615004675,52.07421179260854,0 -1.009980459670747,52.07407959158274,0 -1.009873606361786,52.07392761408938,0 -1.009680798616207,52.0737292922982,0 -1.009624820755181,52.07363886094937,0 -1.009569952271324,52.07353556757703,0 -1.00954918345143,52.0734543848053,0 -1.009555435430385,52.07335149533924,0 -1.009576703030436,52.07325047289364,0 -1.009602296892546,52.07317185899726,0 -1.009656835027544,52.07306603174181,0 -1.009732571160978,52.07291788899136,0 -1.009854141854261,52.07272684113363,0 -1.009948341297716,52.07257879650691,0 -1.010038088496069,52.07238964574473,0 -1.010064980047934,52.0723208006691,0 -1.010068089963609,52.0722415214804,0 -1.010070156367657,52.07215534165412,0 -1.010061560716017,52.07203836294193,0 -1.010033943142759,52.07195002747664,0 -1.009942675622967,52.07181516745137,0 -1.009876759790485,52.0717250982843,0 -1.009795576618819,52.0716501881957,0 -1.009557779309865,52.07146047751855,0 -1.009433792209009,52.0713390592674,0 -1.009361799402643,52.07121596342924,0 -1.009335625582881,52.07113426386876,0 -1.009314602086457,52.07100209875701,0 -1.009312369601051,52.07092567236558,0 -1.009357214609747,52.07079910149112,0 -1.009416803707743,52.07069650904031,0 -1.009507541232947,52.07061666489572,0 -1.009568937476626,52.07057371000015,0 -1.009661208669262,52.07051066161015,0 -1.009738349388185,52.07047284603638,0 -1.009875868783896,52.07041315087938,0 -1.010112951840413,52.07031882980825,0 -1.010335222922213,52.07024861884179,0 -1.010561174359333,52.07016502124727,0 -1.010717996079913,52.07009996416529,0 -1.010841567547112,52.07004631523727,0 -1.011004774072006,52.06996790693397,0 -1.011106717250745,52.0699116657403,0 -1.011186620112882,52.0698349750544,0 -1.011275046282968,52.06972616981928,0 -1.012236727136399,52.06868093176793,0 -1.015162510293007,52.06528962671091,0 -1.01625346742529,52.0642588487987,0 -1.016513887961745,52.06402948843758,0 -1.016766413954622,52.06381483355254,0 -1.01684791818074,52.06375682889809,0 -1.016941678081004,52.06370944624842,0 -1.017030666523618,52.06366249878344,0 -1.017144654651415,52.06362427439424,0 -1.017246362221421,52.06358878682531,0 -1.017371784147026,52.06356284037056,0 -1.017490096793866,52.06353827153527,0 -1.01762364212453,52.06352944287788,0 -1.017832690907494,52.06353495199944,0 -1.018034378838171,52.06356786415468,0 -1.018238452718295,52.06359559004902,0 -1.018431079978048,52.06364953603823,0 -1.01852069651488,52.06368104389811,0 -1.018596070879,52.0637207907761,0 -1.01868004964676,52.06376119782561,0 -1.018743992435593,52.06381089849128,0 -1.018811452298819,52.06385652688768,0 -1.018858967904649,52.06390350390652,0 -1.018993035687085,52.06406217458404,0 -1.019107782488455,52.06422117262804,0 -1.019235357656725,52.0643839034753,0 -1.019366314683108,52.06454019376744,0 -1.01952930300157,52.06469624526397,0 -1.019696370164483,52.06485016673575,0 -1.020008179970868,52.06511776347905,0 -1.020196138287969,52.06526694858952,0 -1.022028916512165,52.06652552723003,0 -1.022045582679302,52.06653560195564,0 -1.022060074115243,52.06654444183261,0 -1.022079270441002,52.06655249709476,0 -1.022097509641322,52.06655755601457,0 -1.022114712467036,52.06656115515087,0 -1.022130919322024,52.06656375413018,0 -1.022148050468565,52.06656559607554,0 -1.022167044525203,52.0665665616045,0 -1.022205083270686,52.06656672381747,0 -1.022244704970487,52.06656314579924,0 -1.022285587909022,52.06655659729491,0 -1.022316440497446,52.06654761226398,0 -1.022343026341772,52.06653633540961,0 -1.022394565717459,52.06651244637424,0 -1.022615580053112,52.06638026526601,0 -1.022726691883818,52.06632178510995,0 -1.022857839676085,52.06627529665404,0 -1.022913826324862,52.06625239245865,0 -1.022988060904715,52.06624504335417,0 -1.023056495735027,52.066236205632,0 -1.023130068607652,52.06623931138905,0 -1.023234828044627,52.06625897008701,0 -1.023327435870145,52.06629640685486,0 -1.02349570119374,52.06638863059514,0 -1.02377442548033,52.06658786030396,0 -1.024019008492784,52.066825386319,0 -1.02420909829768,52.06706115129428,0 -1.024285502572707,52.06719644085609,0 -1.024322575377683,52.06732742795145,0 -1.024341919601366,52.06740428808654,0 -1.024343478806711,52.06745985213485,0 -1.02434727443784,52.067543525226,0 -1.024293663750491,52.06759671613199,0 -1.0227119192528,52.06892903235691,0";
+
+const coords = kmlCoords.trim().split(/\s+/).map(p => {
+    const [lon, lat] = p.split(',').map(Number);
+    return { lon, lat };
+});
+
+const centerLon = coords.reduce((a, b) => a + b.lon, 0) / coords.length;
+const centerLat = coords.reduce((a, b) => a + b.lat, 0) / coords.length;
+
+const points = coords.map(p => {
+    const proj = project(p.lon, p.lat, centerLon, centerLat);
+    return new THREE.Vector3(proj.x, 0, proj.z);
+});
+
+const curve = new THREE.CatmullRomCurve3(points, true);
+curve.curveType = 'centripetal'; 
 
 // ================= GROUND =================
 const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(2000, 2000),
-  new THREE.MeshStandardMaterial({ color: 0x228B22 })
+    new THREE.PlaneGeometry(10000, 10000),
+    new THREE.MeshStandardMaterial({ color: 0x228B22 })
 );
 ground.rotation.x = -Math.PI/2;
 scene.add(ground);
 
-// ================= TRACK =================
-const scale = 5;
-const rawPoints = [
-  [0,0],[20,10],[40,30],[80,60],[60,120],[20,160],
-  [-20,150],[-50,140],[-90,130],[-140,120],
-  [-150,60],[-130,20],[-100,30],[-60,80],
-  [-20,110],[0,80],[5,40],[0,0]
-];
-
-const points = rawPoints.map(p => new THREE.Vector3(p[0]*scale, 0, p[1]*scale));
-const curve = new THREE.CatmullRomCurve3(points, true);
-
-// ================= ROAD =================
+// ================= ROAD GEOMETRY (Frenet Fix) =================
 const roadWidth = 14;
-const segments = 400;
+const segments = 1200; 
+const frames = curve.computeFrenetFrames(segments, true);
 
-const positions = [];
-const indices = [];
+const roadPositions = [];
+const roadIndices = [];
 
 for (let i = 0; i < segments; i++) {
-  const t1 = i / segments;
-  const t2 = (i + 1) / segments;
+    const p1 = curve.getPointAt(i / segments);
+    const p2 = curve.getPointAt(((i + 1) % (segments + 1)) / segments);
 
-  const p1 = curve.getPointAt(t1);
-  const p2 = curve.getPointAt(t2);
+    const n1 = frames.binormals[i];
+    const n2 = frames.binormals[(i + 1) % segments];
 
-  const tan1 = curve.getTangentAt(t1);
-  const tan2 = curve.getTangentAt(t2);
+    const l1 = p1.clone().add(n1.clone().multiplyScalar(roadWidth / 2));
+    const r1 = p1.clone().add(n1.clone().multiplyScalar(-roadWidth / 2));
+    const l2 = p2.clone().add(n2.clone().multiplyScalar(roadWidth / 2));
+    const r2 = p2.clone().add(n2.clone().multiplyScalar(-roadWidth / 2));
 
-  const n1 = new THREE.Vector3(-tan1.z, 0, tan1.x).normalize();
-  const n2 = new THREE.Vector3(-tan2.z, 0, tan2.x).normalize();
+    l1.y = r1.y = l2.y = r2.y = 0.1;
 
-  const l1 = p1.clone().add(n1.clone().multiplyScalar(roadWidth / 2));
-  const r1 = p1.clone().add(n1.clone().multiplyScalar(-roadWidth / 2));
-
-  const l2 = p2.clone().add(n2.clone().multiplyScalar(roadWidth / 2));
-  const r2 = p2.clone().add(n2.clone().multiplyScalar(-roadWidth / 2));
-
-  l1.y = r1.y = l2.y = r2.y = 0.05;
-
-  const base = positions.length / 3;
-
-  positions.push(
-    l1.x, l1.y, l1.z,
-    r1.x, r1.y, r1.z,
-    l2.x, l2.y, l2.z,
-    r2.x, r2.y, r2.z
-  );
-
-  indices.push(
-    base, base+1, base+2,
-    base+1, base+3, base+2
-  );
+    const base = roadPositions.length / 3;
+    roadPositions.push(l1.x, l1.y, l1.z, r1.x, r1.y, r1.z, l2.x, l2.y, l2.z, r2.x, r2.y, r2.z);
+    roadIndices.push(base, base+1, base+2, base+1, base+3, base+2);
 }
 
-const geometry = new THREE.BufferGeometry();
-geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-geometry.setIndex(indices);
-geometry.computeVertexNormals();
-geometry.computeBoundingSphere();
+const roadGeo = new THREE.BufferGeometry();
+roadGeo.setAttribute('position', new THREE.Float32BufferAttribute(roadPositions, 3));
+roadGeo.setIndex(roadIndices);
+roadGeo.computeVertexNormals();
 
-const road = new THREE.Mesh(
-  geometry,
-  new THREE.MeshStandardMaterial({
-    color: 0x333333,
-    side: THREE.DoubleSide
-  })
-);
-
+const road = new THREE.Mesh(roadGeo, new THREE.MeshStandardMaterial({ color: 0x333333, side: THREE.DoubleSide }));
 scene.add(road);
 
 // ================= CAR =================
 const car = new THREE.Mesh(
-  new THREE.BoxGeometry(1, 1, 2),
-  new THREE.MeshStandardMaterial({ color:0xff0000 })
+    new THREE.BoxGeometry(2, 1, 4),
+    new THREE.MeshStandardMaterial({ color:0xff0000 })
 );
-
-car.position.set(0, 0.3, 0);
+const startPos = curve.getPointAt(0);
+car.position.set(startPos.x, 0.6, startPos.z);
 scene.add(car);
 
-// ================= CONTROLS =================
+// ================= INPUT & CAMERA STATE =================
+let freeCam = false;
+let yaw = 0;
+let pitch = 0;
+const speed = 1.2;
+const verticalSpeed = 1.0;
+
 let keys = {};
-document.addEventListener("keydown",(e)=>keys[e.key.toLowerCase()] = true);
-document.addEventListener("keyup",(e)=>keys[e.key.toLowerCase()] = false);
+let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+let flyUp = false, flyDown = false;
 
-// ================= PHYSICS =================
+// Physics for car
 let velocity = 0;
-const maxSpeed = 2.5;
-const reverseSpeed = -1.5;
-const acceleration = 0.05;
-const friction = 0.98;
+const maxSpeed = 4.0;
+const acceleration = 0.1;
+const friction = 0.96;
+const baseTurn = 0.045;
 
-const baseTurn = 0.04;
-const minTurnFactor = 0.25; // prevents zero turning
+// ================= EVENT LISTENERS =================
 
-// ================= ANIMATION =================
-function animate(){
-  requestAnimationFrame(animate);
+document.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    keys[k] = true;
 
-  // ACCELERATION
-  if(keys["arrowup"]) velocity += acceleration;
-  if(keys["arrowdown"]) velocity -= acceleration;
+    if (k === "t") {
+        freeCam = !freeCam;
+        if (freeCam) {
+            // Initialize free cam orientation
+            yaw = car.rotation.y + Math.PI;
+            pitch = -0.2;
+        }
+    }
 
-  // CLAMP SPEED
-  velocity = Math.min(maxSpeed, Math.max(reverseSpeed, velocity));
+    if (k === "w" || e.key === "ArrowUp") moveForward = true;
+    if (k === "s" || e.key === "ArrowDown") moveBackward = true;
+    if (k === "a" || e.key === "ArrowLeft") moveLeft = true;
+    if (k === "d" || e.key === "ArrowRight") moveRight = true;
+});
 
-  // FRICTION
-  velocity *= friction;
+document.addEventListener("keyup", (e) => {
+    const k = e.key.toLowerCase();
+    keys[k] = false;
 
-  if(Math.abs(velocity) < 0.001) velocity = 0;
+    if (k === "w" || e.key === "ArrowUp") moveForward = false;
+    if (k === "s" || e.key === "ArrowDown") moveBackward = false;
+    if (k === "a" || e.key === "ArrowLeft") moveLeft = false;
+    if (k === "d" || e.key === "ArrowRight") moveRight = false;
+});
 
-  // SPEED-BASED TURN REDUCTION
-  const speedRatio = Math.abs(velocity) / maxSpeed;
-  let turnFactor = 1 - speedRatio;
+document.body.addEventListener("click", () => {
+    if (freeCam) document.body.requestPointerLock();
+});
 
-  // clamp so turning never becomes zero
-  turnFactor = Math.max(minTurnFactor, turnFactor);
+document.addEventListener("mousemove", (e) => {
+    if (freeCam && document.pointerLockElement === document.body) {
+        yaw -= e.movementX * 0.002;
+        pitch -= e.movementY * 0.002;
+        pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+    }
+});
 
-  //Fix turning mechanism
-  const actualTurn = baseTurn * turnFactor;
+document.addEventListener("mousedown", (e) => {
+    if (freeCam) {
+        if (e.button === 0) flyUp = true;
+        if (e.button === 2) flyDown = true;
+    }
+});
 
-  if(velocity !== 0){
-    if(keys["arrowleft"]) car.rotation.y += actualTurn;
-    if(keys["arrowright"]) car.rotation.y -= actualTurn;
-  }
+document.addEventListener("mouseup", (e) => {
+    if (freeCam) {
+        if (e.button === 0) flyUp = false;
+        if (e.button === 2) flyDown = false;
+    }
+});
 
-  // MOVE
-  car.position.x -= Math.sin(car.rotation.y) * velocity;
-  car.position.z -= Math.cos(car.rotation.y) * velocity;
-  car.position.y = 0.3;
+document.addEventListener("contextmenu", e => e.preventDefault());
 
-  // CAMERA FOLLOW
-  const dist = 12;
-  const height = 6;
+// ================= ANIMATION LOOP =================
 
-  const tx = car.position.x + Math.sin(car.rotation.y)*dist;
-  const tz = car.position.z + Math.cos(car.rotation.y)*dist;
+function animate() {
+    requestAnimationFrame(animate);
 
-  camera.position.x += (tx - camera.position.x)*0.1;
-  camera.position.y += (car.position.y + height - camera.position.y)*0.1;
-  camera.position.z += (tz - camera.position.z)*0.1;
+    if (freeCam) {
+        // FREE CAMERA LOGIC
+        const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(pitch, yaw, 0));
+        const side = new THREE.Vector3(1, 0, 0).applyEuler(new THREE.Euler(0, yaw, 0));
 
-  camera.lookAt(car.position);
+        if (moveForward) camera.position.addScaledVector(dir, speed);
+        if (moveBackward) camera.position.addScaledVector(dir, -speed);
+        if (moveLeft) camera.position.addScaledVector(side, -speed);
+        if (moveRight) camera.position.addScaledVector(side, speed);
+        if (flyUp) camera.position.y += verticalSpeed;
+        if (flyDown) camera.position.y -= verticalSpeed;
 
-  renderer.render(scene, camera);
+        camera.rotation.set(pitch, yaw, 0, 'YXZ');
+    } else {
+        // CAR RACING LOGIC
+        if (keys["arrowup"] || keys["w"]) velocity += acceleration;
+        if (keys["arrowdown"] || keys["s"]) velocity -= acceleration;
+
+        velocity = Math.min(maxSpeed, Math.max(-1.5, velocity));
+        velocity *= friction;
+
+        if (velocity !== 0) {
+            if (keys["arrowleft"] || keys["a"]) car.rotation.y += baseTurn;
+            if (keys["arrowright"] || keys["d"]) car.rotation.y -= baseTurn;
+        }
+
+        car.position.x -= Math.sin(car.rotation.y) * velocity;
+        car.position.z -= Math.cos(car.rotation.y) * velocity;
+
+        // Smooth Camera Follow
+        const camDist = 15;
+        const camHeight = 6;
+        const targetCamPos = new THREE.Vector3(
+            car.position.x + Math.sin(car.rotation.y) * camDist,
+            car.position.y + camHeight,
+            car.position.z + Math.cos(car.rotation.y) * camDist
+        );
+        camera.position.lerp(targetCamPos, 0.1);
+        camera.lookAt(car.position);
+    }
+
+    renderer.render(scene, camera);
 }
 
 animate();
 
-// ================= RESIZE =================
-window.addEventListener("resize",()=>{
-  camera.aspect = window.innerWidth/window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+window.addEventListener("resize", () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
 </script>
