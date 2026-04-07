@@ -1,20 +1,20 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>McPath</title>
+  <title>Silverstone - Corrected Orientation</title>
   <style>
     body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
     #ui {
       position: absolute; top: 10px; left: 10px; color: white;
       background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px;
-      pointer-events: none;
+      pointer-events: none; z-index: 10;
     }
   </style>
 </head>
 <body>
 <div id="ui">
   <b>T</b>: Toggle Free Cam | <b>WASD</b>: Move | <b>Mouse</b>: Look<br>
-  <b>Left Click</b>: Up | <b>Right Click</b>: Down
+  <b>Left Click</b>: Up | <b>Right Click</b>: Down | <b>Car</b>: Arrows/WASD (when T off)
 </div>
 <script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
 <script>
@@ -34,10 +34,11 @@ const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
 dirLight.position.set(500, 1000, 500);
 scene.add(dirLight);
 
-// ================= GEOGRAPHIC PROJECTION =================
+// ================= GEOGRAPHIC PROJECTION (FLIPPED X) =================
 function project(lon, lat, centerLon, centerLat) {
     const radius = 6378137;
-    const x = radius * (lon - centerLon) * (Math.PI / 180) * Math.cos(centerLat * Math.PI / 180);
+    // Flipping X here to fix inverted turns
+    const x = -1 * (radius * (lon - centerLon) * (Math.PI / 180) * Math.cos(centerLat * Math.PI / 180));
     const z = radius * (lat - centerLat) * (Math.PI / 180);
     return { x, z };
 }
@@ -117,7 +118,7 @@ scene.add(car);
 let freeCam = false;
 let yaw = 0;
 let pitch = 0;
-const speed = 1.2;
+const freeCamSpeed = 1.2;
 const verticalSpeed = 1.0;
 
 let keys = {};
@@ -140,7 +141,12 @@ document.addEventListener("keydown", (e) => {
     if (k === "t") {
         freeCam = !freeCam;
         if (freeCam) {
-            // Initialize free cam orientation
+            // Position camera slightly behind car for free cam entry
+            camera.position.set(
+              car.position.x + Math.sin(car.rotation.y)*12,
+              car.position.y + 6,
+              car.position.z + Math.cos(car.rotation.y)*12
+            );
             yaw = car.rotation.y + Math.PI;
             pitch = -0.2;
         }
@@ -200,10 +206,10 @@ function animate() {
         const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(pitch, yaw, 0));
         const side = new THREE.Vector3(1, 0, 0).applyEuler(new THREE.Euler(0, yaw, 0));
 
-        if (moveForward) camera.position.addScaledVector(dir, speed);
-        if (moveBackward) camera.position.addScaledVector(dir, -speed);
-        if (moveLeft) camera.position.addScaledVector(side, -speed);
-        if (moveRight) camera.position.addScaledVector(side, speed);
+        if (moveForward) camera.position.addScaledVector(dir, freeCamSpeed);
+        if (moveBackward) camera.position.addScaledVector(dir, -freeCamSpeed);
+        if (moveLeft) camera.position.addScaledVector(side, -freeCamSpeed);
+        if (moveRight) camera.position.addScaledVector(side, freeCamSpeed);
         if (flyUp) camera.position.y += verticalSpeed;
         if (flyDown) camera.position.y -= verticalSpeed;
 
