@@ -1,186 +1,1274 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>McPath</title>
-  <style>
-    body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
-    #ui {
-      position: absolute; top: 10px; left: 10px; color: white;
-      background: rgba(0,0,0,0.7); padding: 15px; border-radius: 8px;
-      pointer-events: none; z-index: 10; border-left: 4px solid #d61e1e;
-    }
-    .stats { color: #00ff00; font-family: monospace; font-size: 1.2em; }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Silverstone — F1 Circuit Simulator</title>
+<style>
+  /* =============================================
+     GLOBAL STYLES — slowroads.io-inspired minimal HUD
+  ============================================= */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0a0f1a;
+    overflow: hidden;
+    font-family: 'Courier New', monospace;
+  }
+
+  canvas { display: block; }
+
+  /* ---- HUD OVERLAY ---- */
+  #hud {
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: flex-end;
+    gap: 32px;
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  .hud-panel {
+    background: rgba(10, 12, 20, 0.55);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 12px 22px;
+    color: rgba(255,255,255,0.85);
+    letter-spacing: 0.08em;
+  }
+
+  #speedo-panel {
+    text-align: center;
+  }
+
+  #speed-value {
+    font-size: 3rem;
+    font-weight: 700;
+    color: #e8f0fe;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #speed-unit {
+    font-size: 0.65rem;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 0.2em;
+    margin-top: 2px;
+  }
+
+  #gear-panel {
+    text-align: center;
+    min-width: 54px;
+  }
+
+  #gear-label {
+    font-size: 0.55rem;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 0.18em;
+    margin-bottom: 4px;
+  }
+
+  #gear-value {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #a8d8a8;
+    line-height: 1;
+  }
+
+  #lap-panel {
+    text-align: center;
+    min-width: 80px;
+  }
+
+  #lap-label {
+    font-size: 0.55rem;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 0.18em;
+    margin-bottom: 4px;
+  }
+
+  #lap-value {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: #f5c842;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- THROTTLE / BRAKE BARS ---- */
+  #pedal-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    justify-content: flex-end;
+    padding-bottom: 4px;
+  }
+
+  .pedal-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .pedal-label {
+    font-size: 0.5rem;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 0.18em;
+    width: 14px;
+    text-align: right;
+  }
+
+  .pedal-bar-bg {
+    width: 70px;
+    height: 5px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .pedal-bar-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 3px;
+    transition: width 0.04s linear;
+  }
+
+  #throttle-fill { background: #7be07b; }
+  #brake-fill    { background: #e07b7b; }
+
+  /* ---- MINIMAP ---- */
+  #minimap-wrap {
+    position: fixed;
+    top: 20px;
+    right: 22px;
+    z-index: 100;
+    pointer-events: none;
+  }
+
+  #minimap {
+    width: 160px;
+    height: 160px;
+    border-radius: 10px;
+    background: rgba(10,12,20,0.55);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.08);
+    overflow: hidden;
+  }
+
+  /* ---- TOP INFO BAR ---- */
+  #top-bar {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    pointer-events: none;
+    z-index: 100;
+    text-align: center;
+    color: rgba(255,255,255,0.3);
+    font-size: 0.55rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+  }
+
+  /* ---- CONTROLS HINT ---- */
+  #controls-hint {
+    position: fixed;
+    bottom: 18px;
+    right: 22px;
+    pointer-events: none;
+    z-index: 100;
+    color: rgba(255,255,255,0.22);
+    font-size: 0.5rem;
+    letter-spacing: 0.12em;
+    line-height: 1.8;
+    text-align: right;
+  }
+
+  /* ---- CAMERA MODE INDICATOR ---- */
+  #cam-indicator {
+    position: fixed;
+    top: 16px;
+    left: 22px;
+    pointer-events: none;
+    z-index: 100;
+    color: rgba(255,255,255,0.28);
+    font-size: 0.55rem;
+    letter-spacing: 0.18em;
+  }
+
+  /* ---- LOADING SCREEN ---- */
+  #loading {
+    position: fixed;
+    inset: 0;
+    background: #0a0f1a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+    transition: opacity 0.8s ease;
+  }
+
+  #loading h1 {
+    color: rgba(255,255,255,0.9);
+    font-size: 1.1rem;
+    letter-spacing: 0.4em;
+    font-weight: 400;
+    margin-bottom: 6px;
+  }
+
+  #loading p {
+    color: rgba(255,255,255,0.25);
+    font-size: 0.55rem;
+    letter-spacing: 0.28em;
+  }
+
+  .load-bar-bg {
+    width: 180px;
+    height: 2px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 2px;
+    margin-top: 24px;
+    overflow: hidden;
+  }
+
+  .load-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: rgba(255,255,255,0.5);
+    border-radius: 2px;
+    animation: loadanim 1.2s ease forwards;
+  }
+
+  @keyframes loadanim {
+    to { width: 100%; }
+  }
+</style>
 </head>
 <body>
-<div id="ui">
-  <b>F1 SIMULATION MODE</b><br>
-  0-100 km/h: ~2.5s | 0-200 km/h: ~4.0s<br>
-  <div class="stats" id="speedo">0 KM/H</div>
+
+<!-- Loading Screen -->
+<div id="loading">
+  <h1>SILVERSTONE</h1>
+  <p>FORMULA 1 CIRCUIT · 5.891 KM</p>
+  <div class="load-bar-bg"><div class="load-bar-fill"></div></div>
 </div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-panel" id="pedal-panel">
+    <div class="pedal-row">
+      <span class="pedal-label">T</span>
+      <div class="pedal-bar-bg"><div class="pedal-bar-fill" id="throttle-fill"></div></div>
+    </div>
+    <div class="pedal-row">
+      <span class="pedal-label">B</span>
+      <div class="pedal-bar-bg"><div class="pedal-bar-fill" id="brake-fill"></div></div>
+    </div>
+  </div>
+  <div class="hud-panel" id="speedo-panel">
+    <div id="speed-value">0</div>
+    <div id="speed-unit">KM/H</div>
+  </div>
+  <div class="hud-panel" id="gear-panel">
+    <div id="gear-label">GEAR</div>
+    <div id="gear-value">N</div>
+  </div>
+  <div class="hud-panel" id="lap-panel">
+    <div id="lap-label">LAP TIME</div>
+    <div id="lap-value">0:00.0</div>
+  </div>
+</div>
+
+<!-- Minimap -->
+<div id="minimap-wrap">
+  <canvas id="minimap" width="160" height="160"></canvas>
+</div>
+
+<!-- Top Bar -->
+<div id="top-bar">SILVERSTONE GP · FOLLOW CAM</div>
+
+<!-- Camera mode -->
+<div id="cam-indicator">CAM: CHASE</div>
+
+<!-- Controls hint -->
+<div id="controls-hint">
+  W/↑ THROTTLE · S/↓ BRAKE<br>
+  A/← D/→ STEER<br>
+  T FREE CAMERA<br>
+  R RESET
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
 <script>
+/*
+ * ================================================================
+ *  SILVERSTONE F1 SIMULATOR
+ *  slowroads.io-inspired aesthetic + real circuit data
+ *
+ *  Architecture:
+ *    TrackSystem        — KML → world coords → procedural road mesh
+ *    Environment        — sky gradient, fog, terrain
+ *    CarModel           — low-poly F1 car (procedural geometry)
+ *    PhysicsController  — F1-spec acceleration / braking / steering
+ *    CameraSystem       — chase cam + free cam with pointer lock
+ *    HUDSystem          — speed, gear, lap timer, minimap, pedals
+ *    GameLoop           — requestAnimationFrame master loop
+ *
+ *  Track data: Silverstone GP KML centerline (real coordinates)
+ *  Scale:      5,891 metres (real circuit length)
+ * ================================================================
+ */
 
-// ================= SCENE SETUP =================
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x8ebce0);
+// ================================================================
+//  CONSTANTS
+// ================================================================
+const TRACK_TARGET_LENGTH_M = 5891;  // Real Silverstone GP length
+const TRACK_WIDTH            = 14;   // metres — avg Silverstone width
+const TRACK_SEGMENTS         = 4000; // curve subdivision for smooth geo
+const CAR_TOP_SPEED_MS       = 90;   // ~324 km/h in sim units (~m/s scaled)
+const EARTH_RADIUS           = 6378137;
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 5000);
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(window.devicePixelRatio); // Enhances smoothness on high-res screens
+// ================================================================
+//  SCENE BOOTSTRAP
+// ================================================================
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = false; // keep 60fps
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.5));
-const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-dirLight.position.set(500, 1000, 500);
-scene.add(dirLight);
+const scene = new THREE.Scene();
 
-// ================= TRACK PROJECTION =================
-function project(lon, lat, centerLon, centerLat) {
-    const radius = 6378137;
-    const x = -1 * (radius * (lon - centerLon) * (Math.PI / 180) * Math.cos(centerLat * Math.PI / 180));
-    const z = radius * (lat - centerLat) * (Math.PI / 180);
+// slowroads palette: soft dusty sky, gentle fog
+const FOG_COLOR = new THREE.Color(0xb8cfe8);
+scene.fog = new THREE.FogExp2(FOG_COLOR, 0.00018);
+scene.background = FOG_COLOR;
+
+const mainCamera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.5, 8000);
+scene.add(mainCamera);
+
+window.addEventListener('resize', () => {
+  mainCamera.aspect = window.innerWidth / window.innerHeight;
+  mainCamera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ================================================================
+//  LIGHTING — soft, dreamy like slowroads
+// ================================================================
+function setupLighting() {
+  // Ambient — fills shadows gently
+  const ambient = new THREE.AmbientLight(0xd4e8f5, 1.8);
+  scene.add(ambient);
+
+  // Key sun — warm, low angle
+  const sun = new THREE.DirectionalLight(0xfff4e0, 2.2);
+  sun.position.set(600, 900, 400);
+  scene.add(sun);
+
+  // Bounce fill — cool sky light from below
+  const bounce = new THREE.HemisphereLight(0xb8d8f0, 0x3a5a2a, 0.9);
+  scene.add(bounce);
+}
+setupLighting();
+
+// ================================================================
+//  ENVIRONMENT — procedural terrain + sky dome
+// ================================================================
+function buildEnvironment() {
+  // Sky dome — soft gradient sphere
+  const skyGeo = new THREE.SphereGeometry(4000, 16, 8);
+  // Invert so inside is rendered
+  skyGeo.scale(-1, 1, 1);
+
+  // Gradient via vertex colors top→bottom
+  const skyColors = [];
+  const skyPos = skyGeo.attributes.position;
+  const skyTop    = new THREE.Color(0x4a80c4);
+  const skyMid    = new THREE.Color(0x89b8e0);
+  const skyHoriz  = new THREE.Color(0xc8dff0);
+
+  for (let i = 0; i < skyPos.count; i++) {
+    const y = skyPos.getY(i);
+    const norm = Math.max(0, Math.min(1, (y + 1000) / 4500));
+    const col = new THREE.Color();
+    if (norm > 0.4) col.lerpColors(skyMid, skyTop, (norm - 0.4) / 0.6);
+    else col.lerpColors(skyHoriz, skyMid, norm / 0.4);
+    skyColors.push(col.r, col.g, col.b);
+  }
+  skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(skyColors, 3));
+  const skyMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false });
+  scene.add(new THREE.Mesh(skyGeo, skyMat));
+
+  // Ground plane — soft green like slowroads grassland
+  // Subdivided so vertex colors give gentle terrain feel
+  const groundGeo = new THREE.PlaneGeometry(9000, 9000, 1, 1);
+  const groundMat = new THREE.MeshLambertMaterial({ color: 0x5a8a4a });
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.15;
+  scene.add(ground);
+
+  // Decorative far hills (simple low-poly ring of bumps)
+  buildHills();
+}
+
+function buildHills() {
+  const hillGeo = new THREE.BufferGeometry();
+  const verts = [];
+  const cols  = [];
+  const COUNT = 32;
+  const RADIUS = 2800;
+
+  for (let i = 0; i < COUNT; i++) {
+    const a0 = (i / COUNT) * Math.PI * 2;
+    const a1 = ((i + 1) / COUNT) * Math.PI * 2;
+    const h  = 80 + Math.sin(i * 2.3) * 60 + Math.sin(i * 5.7) * 30;
+    const r0 = RADIUS + Math.sin(i * 1.9) * 200;
+    const r1 = RADIUS + Math.sin((i+1) * 1.9) * 200;
+
+    const x0 = Math.cos(a0) * r0, z0 = Math.sin(a0) * r0;
+    const x1 = Math.cos(a1) * r1, z1 = Math.sin(a1) * r1;
+
+    // Two triangles per segment (hill face)
+    verts.push(x0, 0, z0,  x1, 0, z1,  x0, h, z0);
+    verts.push(x1, 0, z1,  x1, h, z1,  x0, h, z0);
+
+    const c = new THREE.Color().setHSL(0.28 + Math.sin(i) * 0.04, 0.45, 0.35 + Math.sin(i*0.7)*0.05);
+    for (let v = 0; v < 6; v++) cols.push(c.r, c.g, c.b);
+  }
+
+  hillGeo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  hillGeo.setAttribute('color',    new THREE.Float32BufferAttribute(cols,  3));
+  hillGeo.computeVertexNormals();
+  const hillMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  scene.add(new THREE.Mesh(hillGeo, hillMat));
+}
+
+buildEnvironment();
+
+// ================================================================
+//  TRACK SYSTEM — KML → real world scale → procedural road mesh
+// ================================================================
+
+/*
+ * Raw KML centerline data for Silverstone GP circuit
+ * Format: lon,lat,elevation (elevation ignored; flat track)
+ * Source: Derived from Silverstone GP KML
+ */
+const KML_RAW = `-1.022711843137816,52.06892916884821,0 -1.022543821848504,52.06906688047263,0 -1.022378841158485,52.06919652217074,0 -1.022045835191539,52.06946387455488,0 -1.021379811294514,52.06999857650789,0 -1.020047715645912,52.0710679691522,0 -1.019941137193568,52.07113710549655,0 -1.019872174451242,52.07117533588469,0 -1.019790572751295,52.07121284223464,0 -1.019687898061005,52.07124725759785,0 -1.019586843496618,52.07128013933243,0 -1.019470103858152,52.07130417076701,0 -1.019302019095754,52.07132754814102,0 -1.019186590988931,52.07132834087349,0 -1.018763076781927,52.07132288745139,0 -1.018402781163047,52.07130394656378,0 -1.017968501494061,52.07126078674791,0 -1.017343633136264,52.07121540413361,0 -1.016963304957373,52.07120591551762,0 -1.016676177653361,52.07120752763051,0 -1.016437512216027,52.07123639894527,0 -1.015953895601932,52.07136295353253,0 -1.015509370187704,52.07156219526161,0 -1.015008767093226,52.07181849306329,0 -1.014381891970675,52.07213987416185,0 -1.014020302343694,52.07232616453279,0 -1.013738284394431,52.07245115893418,0 -1.013571558140038,52.07251061087687,0 -1.013391887119737,52.07252301831785,0 -1.013302309592221,52.07251852364098,0 -1.013191848012908,52.07250018634856,0 -1.013128353395734,52.07247769815491,0 -1.013093331467296,52.07245373575303,0 -1.013042853339319,52.07239273132191,0 -1.012909903871024,52.07211497039278,0 -1.012752669877759,52.07179117874326,0 -1.012700269651031,52.07169511787234,0 -1.012650343042304,52.07159138341352,0 -1.012575520332336,52.07150902359619,0 -1.012443102887107,52.07143872642602,0 -1.012321054787251,52.07142144374695,0 -1.012207493443532,52.07141544197531,0 -1.012137118932693,52.0714255576308,0 -1.012056392887445,52.07145606535417,0 -1.011971380624895,52.07150989044806,0 -1.011899377019507,52.07160583073239,0 -1.011661344291879,52.07197848181689,0 -1.011523907588141,52.0723879153871,0 -1.011466190478909,52.0726566773243,0 -1.011456823476395,52.07288177228693,0 -1.011503242849371,52.07302979245897,0 -1.011592448591194,52.07314013146756,0 -1.011658057469914,52.07320672855661,0 -1.013943646783715,52.07449182465562,0 -1.016373226849587,52.07583500256612,0 -1.018289103309756,52.07691186347927,0 -1.018584150793351,52.0770389978051,0 -1.018769486026851,52.07709766017301,0 -1.019071587470013,52.07714329685435,0 -1.019194033821331,52.07714258299188,0 -1.019354394050966,52.07713308546425,0 -1.019531633699644,52.07711190607985,0 -1.019721016841353,52.07708495992556,0 -1.019884061865974,52.07702567509704,0 -1.020005824492106,52.07693183974374,0 -1.020052855102812,52.07683503240868,0 -1.020152570370445,52.076289291461,0 -1.020187978976762,52.07617571580898,0 -1.020253534870146,52.076089094878,0 -1.020293878531747,52.07603721595142,0 -1.020357120341626,52.07598669105293,0 -1.020443556805792,52.07592781156124,0 -1.020555177890118,52.07587256255955,0 -1.020722154675426,52.0758319172051,0 -1.020940357859478,52.0758186733425,0 -1.021078851272855,52.0758252604252,0 -1.021194883869846,52.07584981205439,0 -1.021318679304499,52.07587570275009,0 -1.021396605690074,52.07590884694746,0 -1.021464464609088,52.07594827381282,0 -1.021515936974837,52.07599307220902,0 -1.021572481375739,52.07603729016547,0 -1.021608912908299,52.07607656935186,0 -1.021628192752001,52.07611127861735,0 -1.021648116981477,52.07615748790958,0 -1.021680818058244,52.07622379131984,0 -1.021678545088781,52.07626382811617,0 -1.021668654432987,52.07633287818101,0 -1.021648646788036,52.07640805025028,0 -1.021606813672025,52.0764789095779,0 -1.021535277852197,52.07658977236952,0 -1.021450382680325,52.07671647414897,0 -1.021377573075559,52.07681713930854,0 -1.021063499999333,52.0772065273502,0 -1.020917781731371,52.07739601031775,0 -1.020800344980297,52.07753623080916,0 -1.020747848287714,52.0775825859881,0 -1.020671618238121,52.07764538891394,0 -1.020566917911963,52.07774074842019,0 -1.020429842982755,52.07783666528307,0 -1.020228016946052,52.07797604632798,0 -1.020008404991211,52.07810154336652,0 -1.01990883452332,52.07816048091318,0 -1.019710292243983,52.07825472369363,0 -1.019529322317199,52.07833666103325,0 -1.019320605318814,52.07842158058226,0 -1.019113153003588,52.07848743399514,0 -1.01890922779352,52.07853624477741,0 -1.018705167354403,52.0785737791524,0 -1.018539407419266,52.07860180689707,0 -1.018297556397646,52.07862746351157,0 -1.01786639301383,52.07865735391881,0 -1.017135797406897,52.07870411096239,0 -1.015182024194222,52.07881723285923,0 -1.013986751819286,52.0788786258669,0 -1.012597704914328,52.07893962829216,0 -1.012456495203243,52.07894032414308,0 -1.012212545302253,52.07893736504715,0 -1.012109132428209,52.0789209879805,0 -1.011993586288433,52.07890345665868,0 -1.011876373664646,52.07888325499225,0 -1.0117925672848,52.07886023173118,0 -1.011685658276874,52.07882292103463,0 -1.011576349647366,52.07877372717901,0 -1.011463711977695,52.07871498450707,0 -1.011378407395237,52.07866040720668,0 -1.011297548448479,52.07858805280264,0 -1.011231679781648,52.07850970083312,0 -1.011182336440994,52.0784215821505,0 -1.011103855465626,52.0782910352393,0 -1.010991949433165,52.0780977203144,0 -1.010913152985069,52.07793560521412,0 -1.010783281595307,52.07767951891431,0 -1.010638157452294,52.07734771384395,0 -1.010514330360384,52.0769943989033,0 -1.010402122180586,52.07662019082863,0 -1.010337983330265,52.0760981000912,0 -1.010309380411951,52.07572139389717,0 -1.010257881428134,52.0750676795035,0 -1.010229573398823,52.07467760838338,0 -1.010205636748811,52.07449107105271,0 -1.010179585121955,52.07438536585984,0 -1.0101436879623,52.07432692413659,0 -1.010077615004675,52.07421179260854,0 -1.009980459670747,52.07407959158274,0 -1.009873606361786,52.07392761408938,0 -1.009680798616207,52.0737292922982,0 -1.009624820755181,52.07363886094937,0 -1.009569952271324,52.07353556757703,0 -1.00954918345143,52.0734543848053,0 -1.009555435430385,52.07335149533924,0 -1.009576703030436,52.07325047289364,0 -1.009602296892546,52.07317185899726,0 -1.009656835027544,52.07306603174181,0 -1.009732571160978,52.07291788899136,0 -1.009854141854261,52.07272684113363,0 -1.009948341297716,52.07257879650691,0 -1.010038088496069,52.07238964574473,0 -1.010064980047934,52.0723208006691,0 -1.010068089963609,52.0722415214804,0 -1.010070156367657,52.07215534165412,0 -1.010061560716017,52.07203836294193,0 -1.010033943142759,52.07195002747664,0 -1.009942675622967,52.07181516745137,0 -1.009876759790485,52.0717250982843,0 -1.009795576618819,52.0716501881957,0 -1.009557779309865,52.07146047751855,0 -1.009433792209009,52.0713390592674,0 -1.009361799402643,52.07121596342924,0 -1.009335625582881,52.07113426386876,0 -1.009314602086457,52.07100209875701,0 -1.009312369601051,52.07092567236558,0 -1.009357214609747,52.07079910149112,0 -1.009416803707743,52.07069650904031,0 -1.009507541232947,52.07061666489572,0 -1.009568937476626,52.07057371000015,0 -1.009661208669262,52.07051066161015,0 -1.009738349388185,52.07047284603638,0 -1.009875868783896,52.07041315087938,0 -1.010112951840413,52.07031882980825,0 -1.010335222922213,52.07024861884179,0 -1.010561174359333,52.07016502124727,0 -1.010717996079913,52.07009996416529,0 -1.010841567547112,52.07004631523727,0 -1.011004774072006,52.06996790693397,0 -1.011106717250745,52.0699116657403,0 -1.011186620112882,52.0698349750544,0 -1.011275046282968,52.06972616981928,0 -1.012236727136399,52.06868093176793,0 -1.015162510293007,52.06528962671091,0 -1.01625346742529,52.0642588487987,0 -1.016513887961745,52.06402948843758,0 -1.016766413954622,52.06381483355254,0 -1.01684791818074,52.06375682889809,0 -1.016941678081004,52.06370944624842,0 -1.017030666523618,52.06366249878344,0 -1.017144654651415,52.06362427439424,0 -1.017246362221421,52.06358878682531,0 -1.017371784147026,52.06356284037056,0 -1.017490096793866,52.06353827153527,0 -1.01762364212453,52.06352944287788,0 -1.017832690907494,52.06353495199944,0 -1.018034378838171,52.06356786415468,0 -1.018238452718295,52.06359559004902,0 -1.018431079978048,52.06364953603823,0 -1.01852069651488,52.06368104389811,0 -1.018596070879,52.0637207907761,0 -1.01868004964676,52.06376119782561,0 -1.018743992435593,52.06381089849128,0 -1.018811452298819,52.06385652688768,0 -1.018858967904649,52.06390350390652,0 -1.018993035687085,52.06406217458404,0 -1.019107782488455,52.06422117262804,0 -1.019235357656725,52.0643839034753,0 -1.019366314683108,52.06454019376744,0 -1.01952930300157,52.06469624526397,0 -1.019696370164483,52.06485016673575,0 -1.020008179970868,52.06511776347905,0 -1.020196138287969,52.06526694858952,0 -1.022028916512165,52.06652552723003,0 -1.022045582679302,52.06653560195564,0 -1.022060074115243,52.06654444183261,0 -1.022079270441002,52.06655249709476,0 -1.022097509641322,52.06655755601457,0 -1.022114712467036,52.06656115515087,0 -1.022130919322024,52.06656375413018,0 -1.022148050468565,52.06656559607554,0 -1.022167044525203,52.0665665616045,0 -1.022205083270686,52.06656672381747,0 -1.022244704970487,52.06656314579924,0 -1.022285587909022,52.06655659729491,0 -1.022316440497446,52.06654761226398,0 -1.022343026341772,52.06653633540961,0 -1.022394565717459,52.06651244637424,0 -1.022615580053112,52.06638026526601,0 -1.022726691883818,52.06632178510995,0 -1.022857839676085,52.06627529665404,0 -1.022913826324862,52.06625239245865,0 -1.022988060904715,52.06624504335417,0 -1.023056495735027,52.066236205632,0 -1.023130068607652,52.06623931138905,0 -1.023234828044627,52.06625897008701,0 -1.023327435870145,52.06629640685486,0 -1.02349570119374,52.06638863059514,0 -1.02377442548033,52.06658786030396,0 -1.024019008492784,52.066825386319,0 -1.02420909829768,52.06706115129428,0 -1.024285502572707,52.06719644085609,0 -1.024322575377683,52.06732742795145,0 -1.024341919601366,52.06740428808654,0 -1.024343478806711,52.06745985213485,0 -1.02434727443784,52.067543525226,0 -1.024293663750491,52.06759671613199,0 -1.0227119192528,52.06892903235691,0`;
+
+/*
+ * TrackSystem — owns curve, road mesh, and coordinate projection.
+ * To add a new circuit: swap KML_RAW, recalculate center, done.
+ */
+const TrackSystem = (() => {
+  // -- Mercator-style flat projection centred on track --
+  function project(lon, lat, cLon, cLat) {
+    const x = -EARTH_RADIUS * (lon - cLon) * (Math.PI / 180) * Math.cos(cLat * Math.PI / 180);
+    const z =  EARTH_RADIUS * (lat - cLat) * (Math.PI / 180);
     return { x, z };
-}
+  }
 
-// ... (KML Data remains the same for Silverstone)
-const kmlCoords = "-1.022711843137816,52.06892916884821,0 -1.022543821848504,52.06906688047263,0 -1.022378841158485,52.06919652217074,0 -1.022045835191539,52.06946387455488,0 -1.021379811294514,52.06999857650789,0 -1.020047715645912,52.0710679691522,0 -1.019941137193568,52.07113710549655,0 -1.019872174451242,52.07117533588469,0 -1.019790572751295,52.07121284223464,0 -1.019687898061005,52.07124725759785,0 -1.019586843496618,52.07128013933243,0 -1.019470103858152,52.07130417076701,0 -1.019302019095754,52.07132754814102,0 -1.019186590988931,52.07132834087349,0 -1.018763076781927,52.07132288745139,0 -1.018402781163047,52.07130394656378,0 -1.017968501494061,52.07126078674791,0 -1.017343633136264,52.07121540413361,0 -1.016963304957373,52.07120591551762,0 -1.016676177653361,52.07120752763051,0 -1.016437512216027,52.07123639894527,0 -1.015953895601932,52.07136295353253,0 -1.015509370187704,52.07156219526161,0 -1.015008767093226,52.07181849306329,0 -1.014381891970675,52.07213987416185,0 -1.014020302343694,52.07232616453279,0 -1.013738284394431,52.07245115893418,0 -1.013571558140038,52.07251061087687,0 -1.013391887119737,52.07252301831785,0 -1.013302309592221,52.07251852364098,0 -1.013191848012908,52.07250018634856,0 -1.013128353395734,52.07247769815491,0 -1.013093331467296,52.07245373575303,0 -1.013042853339319,52.07239273132191,0 -1.012909903871024,52.07211497039278,0 -1.012752669877759,52.07179117874326,0 -1.012700269651031,52.07169511787234,0 -1.012650343042304,52.07159138341352,0 -1.012575520332336,52.07150902359619,0 -1.012443102887107,52.07143872642602,0 -1.012321054787251,52.07142144374695,0 -1.012207493443532,52.07141544197531,0 -1.012137118932693,52.0714255576308,0 -1.012056392887445,52.07145606535417,0 -1.011971380624895,52.07150989044806,0 -1.011899377019507,52.07160583073239,0 -1.011661344291879,52.07197848181689,0 -1.011523907588141,52.0723879153871,0 -1.011466190478909,52.0726566773243,0 -1.011456823476395,52.07288177228693,0 -1.011503242849371,52.07302979245897,0 -1.011592448591194,52.07314013146756,0 -1.011658057469914,52.07320672855661,0 -1.013943646783715,52.07449182465562,0 -1.016373226849587,52.07583500256612,0 -1.018289103309756,52.07691186347927,0 -1.018584150793351,52.0770389978051,0 -1.018769486026851,52.07709766017301,0 -1.019071587470013,52.07714329685435,0 -1.019194033821331,52.07714258299188,0 -1.019354394050966,52.07713308546425,0 -1.019531633699644,52.07711190607985,0 -1.019721016841353,52.07708495992556,0 -1.019884061865974,52.07702567509704,0 -1.020005824492106,52.07693183974374,0 -1.020052855102812,52.07683503240868,0 -1.020152570370445,52.076289291461,0 -1.020187978976762,52.07617571580898,0 -1.020253534870146,52.076089094878,0 -1.020293878531747,52.07603721595142,0 -1.020357120341626,52.07598669105293,0 -1.020443556805792,52.07592781156124,0 -1.020555177890118,52.07587256255955,0 -1.020722154675426,52.0758319172051,0 -1.020940357859478,52.0758186733425,0 -1.021078851272855,52.0758252604252,0 -1.021194883869846,52.07584981205439,0 -1.021318679304499,52.07587570275009,0 -1.021396605690074,52.07590884694746,0 -1.021464464609088,52.07594827381282,0 -1.021515936974837,52.07599307220902,0 -1.021572481375739,52.07603729016547,0 -1.021608912908299,52.07607656935186,0 -1.021628192752001,52.07611127861735,0 -1.021648116981477,52.07615748790958,0 -1.021680818058244,52.07622379131984,0 -1.021678545088781,52.07626382811617,0 -1.021668654432987,52.07633287818101,0 -1.021648646788036,52.07640805025028,0 -1.021606813672025,52.0764789095779,0 -1.021535277852197,52.07658977236952,0 -1.021450382680325,52.07671647414897,0 -1.021377573075559,52.07681713930854,0 -1.021063499999333,52.0772065273502,0 -1.020917781731371,52.07739601031775,0 -1.020800344980297,52.07753623080916,0 -1.020747848287714,52.0775825859881,0 -1.020671618238121,52.07764538891394,0 -1.020566917911963,52.07774074842019,0 -1.020429842982755,52.07783666528307,0 -1.020228016946052,52.07797604632798,0 -1.020008404991211,52.07810154336652,0 -1.01990883452332,52.07816048091318,0 -1.019710292243983,52.07825472369363,0 -1.019529322317199,52.07833666103325,0 -1.019320605318814,52.07842158058226,0 -1.019113153003588,52.07848743399514,0 -1.01890922779352,52.07853624477741,0 -1.018705167354403,52.0785737791524,0 -1.018539407419266,52.07860180689707,0 -1.018297556397646,52.07862746351157,0 -1.01786639301383,52.07865735391881,0 -1.017135797406897,52.07870411096239,0 -1.015182024194222,52.07881723285923,0 -1.013986751819286,52.0788786258669,0 -1.012597704914328,52.07893962829216,0 -1.012456495203243,52.07894032414308,0 -1.012212545302253,52.07893736504715,0 -1.012109132428209,52.0789209879805,0 -1.011993586288433,52.07890345665868,0 -1.011876373664646,52.07888325499225,0 -1.0117925672848,52.07886023173118,0 -1.011685658276874,52.07882292103463,0 -1.011576349647366,52.07877372717901,0 -1.011463711977695,52.07871498450707,0 -1.011378407395237,52.07866040720668,0 -1.011297548448479,52.07858805280264,0 -1.011231679781648,52.07850970083312,0 -1.011182336440994,52.0784215821505,0 -1.011103855465626,52.0782910352393,0 -1.010991949433165,52.0780977203144,0 -1.010913152985069,52.07793560521412,0 -1.010783281595307,52.07767951891431,0 -1.010638157452294,52.07734771384395,0 -1.010514330360384,52.0769943989033,0 -1.010402122180586,52.07662019082863,0 -1.010337983330265,52.0760981000912,0 -1.010309380411951,52.07572139389717,0 -1.010257881428134,52.0750676795035,0 -1.010229573398823,52.07467760838338,0 -1.010205636748811,52.07449107105271,0 -1.010179585121955,52.07438536585984,0 -1.0101436879623,52.07432692413659,0 -1.010077615004675,52.07421179260854,0 -1.009980459670747,52.07407959158274,0 -1.009873606361786,52.07392761408938,0 -1.009680798616207,52.0737292922982,0 -1.009624820755181,52.07363886094937,0 -1.009569952271324,52.07353556757703,0 -1.00954918345143,52.0734543848053,0 -1.009555435430385,52.07335149533924,0 -1.009576703030436,52.07325047289364,0 -1.009602296892546,52.07317185899726,0 -1.009656835027544,52.07306603174181,0 -1.009732571160978,52.07291788899136,0 -1.009854141854261,52.07272684113363,0 -1.009948341297716,52.07257879650691,0 -1.010038088496069,52.07238964574473,0 -1.010064980047934,52.0723208006691,0 -1.010068089963609,52.0722415214804,0 -1.010070156367657,52.07215534165412,0 -1.010061560716017,52.07203836294193,0 -1.010033943142759,52.07195002747664,0 -1.009942675622967,52.07181516745137,0 -1.009876759790485,52.0717250982843,0 -1.009795576618819,52.0716501881957,0 -1.009557779309865,52.07146047751855,0 -1.009433792209009,52.0713390592674,0 -1.009361799402643,52.07121596342924,0 -1.009335625582881,52.07113426386876,0 -1.009314602086457,52.07100209875701,0 -1.009312369601051,52.07092567236558,0 -1.009357214609747,52.07079910149112,0 -1.009416803707743,52.07069650904031,0 -1.009507541232947,52.07061666489572,0 -1.009568937476626,52.07057371000015,0 -1.009661208669262,52.07051066161015,0 -1.009738349388185,52.07047284603638,0 -1.009875868783896,52.07041315087938,0 -1.010112951840413,52.07031882980825,0 -1.010335222922213,52.07024861884179,0 -1.010561174359333,52.07016502124727,0 -1.010717996079913,52.07009996416529,0 -1.010841567547112,52.07004631523727,0 -1.011004774072006,52.06996790693397,0 -1.011106717250745,52.0699116657403,0 -1.011186620112882,52.0698349750544,0 -1.011275046282968,52.06972616981928,0 -1.012236727136399,52.06868093176793,0 -1.015162510293007,52.06528962671091,0 -1.01625346742529,52.0642588487987,0 -1.016513887961745,52.06402948843758,0 -1.016766413954622,52.06381483355254,0 -1.01684791818074,52.06375682889809,0 -1.016941678081004,52.06370944624842,0 -1.017030666523618,52.06366249878344,0 -1.017144654651415,52.06362427439424,0 -1.017246362221421,52.06358878682531,0 -1.017371784147026,52.06356284037056,0 -1.017490096793866,52.06353827153527,0 -1.01762364212453,52.06352944287788,0 -1.017832690907494,52.06353495199944,0 -1.018034378838171,52.06356786415468,0 -1.018238452718295,52.06359559004902,0 -1.018431079978048,52.06364953603823,0 -1.01852069651488,52.06368104389811,0 -1.018596070879,52.0637207907761,0 -1.01868004964676,52.06376119782561,0 -1.018743992435593,52.06381089849128,0 -1.018811452298819,52.06385652688768,0 -1.018858967904649,52.06390350390652,0 -1.018993035687085,52.06406217458404,0 -1.019107782488455,52.06422117262804,0 -1.019235357656725,52.0643839034753,0 -1.019366314683108,52.06454019376744,0 -1.01952930300157,52.06469624526397,0 -1.019696370164483,52.06485016673575,0 -1.020008179970868,52.06511776347905,0 -1.020196138287969,52.06526694858952,0 -1.022028916512165,52.06652552723003,0 -1.022045582679302,52.06653560195564,0 -1.022060074115243,52.06654444183261,0 -1.022079270441002,52.06655249709476,0 -1.022097509641322,52.06655755601457,0 -1.022114712467036,52.06656115515087,0 -1.022130919322024,52.06656375413018,0 -1.022148050468565,52.06656559607554,0 -1.022167044525203,52.0665665616045,0 -1.022205083270686,52.06656672381747,0 -1.022244704970487,52.06656314579924,0 -1.022285587909022,52.06655659729491,0 -1.022316440497446,52.06654761226398,0 -1.022343026341772,52.06653633540961,0 -1.022394565717459,52.06651244637424,0 -1.022615580053112,52.06638026526601,0 -1.022726691883818,52.06632178510995,0 -1.022857839676085,52.06627529665404,0 -1.022913826324862,52.06625239245865,0 -1.022988060904715,52.06624504335417,0 -1.023056495735027,52.066236205632,0 -1.023130068607652,52.06623931138905,0 -1.023234828044627,52.06625897008701,0 -1.023327435870145,52.06629640685486,0 -1.02349570119374,52.06638863059514,0 -1.02377442548033,52.06658786030396,0 -1.024019008492784,52.066825386319,0 -1.02420909829768,52.06706115129428,0 -1.024285502572707,52.06719644085609,0 -1.024322575377683,52.06732742795145,0 -1.024341919601366,52.06740428808654,0 -1.024343478806711,52.06745985213485,0 -1.02434727443784,52.067543525226,0 -1.024293663750491,52.06759671613199,0 -1.0227119192528,52.06892903235691,0";
+  // Parse KML string into raw projected points
+  function parseKML(raw) {
+    const tokens = raw.trim().split(/\s+/);
+    const latLons = tokens.map(t => {
+      const [lon, lat] = t.split(',').map(Number);
+      return { lon, lat };
+    });
 
-const coords = kmlCoords.trim().split(/\s+/).map(p => {
-    const [lon, lat] = p.split(',').map(Number);
-    return { lon, lat };
-});
+    const cLon = latLons.reduce((s, p) => s + p.lon, 0) / latLons.length;
+    const cLat = latLons.reduce((s, p) => s + p.lat, 0) / latLons.length;
 
-const centerLon = coords.reduce((a, b) => a + b.lon, 0) / coords.length;
-const centerLat = coords.reduce((a, b) => a + b.lat, 0) / coords.length;
+    return latLons.map(p => {
+      const { x, z } = project(p.lon, p.lat, cLon, cLat);
+      return new THREE.Vector3(x, 0, z);
+    });
+  }
 
-const points = coords.map(p => {
-    const proj = project(p.lon, p.lat, centerLon, centerLat);
-    return new THREE.Vector3(proj.x, 0, proj.z);
-});
+  // Scale raw points so the curve matches real-world track length
+  function scaleToRealLength(points) {
+    // Build a temporary curve to measure its length
+    const tempCurve = new THREE.CatmullRomCurve3(points, true);
+    tempCurve.curveType = 'centripetal';
+    const rawLength = tempCurve.getLength();
+    const scale = TRACK_TARGET_LENGTH_M / rawLength;
+    return points.map(p => p.clone().multiplyScalar(scale));
+  }
 
-const curve = new THREE.CatmullRomCurve3(points, true);
-curve.curveType = 'centripetal'; 
+  // Build road BufferGeometry using Frenet frames
+  function buildRoadMesh(curve) {
+    const frames = curve.computeFrenetFrames(TRACK_SEGMENTS, true);
+    const positions = [];
+    const indices   = [];
+    const uvs       = [];
+    const colors    = [];
 
-// ================= GROUND =================
-const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(10000, 10000),
-    new THREE.MeshStandardMaterial({ color: 0x2d4d23 })
-);
-ground.rotation.x = -Math.PI/2;
-scene.add(ground);
+    // Asphalt colour — dark blue-grey with slight variance
+    const asphaltBase = new THREE.Color(0x2a2e35);
+    const asphaltVar  = new THREE.Color(0x22262c);
 
-// ================= ROAD (High Res Smoothing) =================
-const segments = 4000; // Drastically increased for smooth edges
-const frames = curve.computeFrenetFrames(segments, true);
-const roadPositions = [];
-const roadIndices = [];
-const baseWidth = 15;
+    for (let i = 0; i < TRACK_SEGMENTS; i++) {
+      const t   = i / TRACK_SEGMENTS;
+      const p   = curve.getPointAt(t);
+      const bin = frames.binormals[i];
 
-for (let i = 0; i < segments; i++) {
-    const t = i / segments;
-    const p = curve.getPointAt(t);
-    const n = frames.binormals[i];
+      // Slightly vary width: narrower at fast corners
+      const tangent     = frames.tangents[i];
+      const nextTangent = frames.tangents[(i + 1) % TRACK_SEGMENTS];
+      const curvature   = tangent.angleTo(nextTangent);
+      const width       = TRACK_WIDTH * (1.0 - Math.min(curvature * 12, 0.15));
 
-    // Smoothing width transitions
-    const tangent = frames.tangents[i];
-    const nextTangent = frames.tangents[(i + 1) % segments];
-    const curvature = tangent.angleTo(nextTangent);
-    const currentWidth = baseWidth + (1 - Math.min(curvature * 35, 1.2)) * 3;
+      const lx = p.x + bin.x * width * 0.5;
+      const lz = p.z + bin.z * width * 0.5;
+      const rx = p.x - bin.x * width * 0.5;
+      const rz = p.z - bin.z * width * 0.5;
+      const y  = 0.06; // slight raise above ground
 
-    const l = p.clone().add(n.clone().multiplyScalar(currentWidth / 2));
-    const r = p.clone().add(n.clone().multiplyScalar(-currentWidth / 2));
-    l.y = r.y = 0.05;
+      positions.push(lx, y, lz, rx, y, rz);
+      uvs.push(0, t * 60, 1, t * 60);
 
-    roadPositions.push(l.x, l.y, l.z, r.x, r.y, r.z);
+      // Subtle vertex colour variation (gives tyre marks feel)
+      const noise = Math.sin(i * 0.07) * 0.03;
+      const col = new THREE.Color().lerpColors(asphaltBase, asphaltVar, 0.5 + noise);
+      colors.push(col.r, col.g, col.b, col.r, col.g, col.b);
 
-    if (i < segments - 1) {
-        const base = i * 2;
-        roadIndices.push(base, base+1, base+2, base+1, base+3, base+2);
+      if (i < TRACK_SEGMENTS - 1) {
+        const b = i * 2;
+        indices.push(b, b+1, b+2, b+1, b+3, b+2);
+      }
     }
-}
-// Connect the loop
-const lastBase = (segments - 1) * 2;
-roadIndices.push(lastBase, lastBase+1, 0, lastBase+1, 1, 0);
+    // Close loop
+    const lb = (TRACK_SEGMENTS - 1) * 2;
+    indices.push(lb, lb+1, 0, lb+1, 1, 0);
 
-const roadGeo = new THREE.BufferGeometry();
-roadGeo.setAttribute('position', new THREE.Float32BufferAttribute(roadPositions, 3));
-roadGeo.setIndex(roadIndices);
-roadGeo.computeVertexNormals();
-const road = new THREE.Mesh(roadGeo, new THREE.MeshStandardMaterial({ color: 0x1a1a1a, side: THREE.DoubleSide }));
-scene.add(road);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('uv',       new THREE.Float32BufferAttribute(uvs,       2));
+    geo.setAttribute('color',    new THREE.Float32BufferAttribute(colors,    3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
 
-// ================= F1 CAR =================
-const car = new THREE.Mesh(
-    new THREE.BoxGeometry(1.9, 0.8, 5.0), 
-    new THREE.MeshStandardMaterial({ color: 0xd61e1e })
-);
-const startPos = curve.getPointAt(0);
-car.position.set(startPos.x, 0.4, startPos.z);
-scene.add(car);
+    const mat = new THREE.MeshLambertMaterial({
+      vertexColors: true,
+      side: THREE.DoubleSide
+    });
 
-// ================= PHYSICS (F1 Spec) =================
-let velocity = 0;
-let keys = {};
-const topSpeed = 90.0; // ~320 km/h in sim units
+    return new THREE.Mesh(geo, mat);
+  }
 
-document.addEventListener("keydown", (e) => { keys[e.key.toLowerCase()] = true; });
-document.addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
+  // Build white edge lines (kerb-like)
+  function buildEdgeLines(curve) {
+    const group = new THREE.Group();
+    const frames = curve.computeFrenetFrames(TRACK_SEGMENTS, true);
 
-const speedo = document.getElementById("speedo");
+    ['left', 'right'].forEach(side => {
+      const pts = [];
+      const mult = side === 'left' ? 1 : -1;
 
-// ================= ANIMATION LOOP =================
-function animate() {
-    requestAnimationFrame(animate);
+      for (let i = 0; i <= TRACK_SEGMENTS; i++) {
+        const t   = (i % TRACK_SEGMENTS) / TRACK_SEGMENTS;
+        const p   = curve.getPointAt(t);
+        const bin = frames.binormals[i % TRACK_SEGMENTS];
+        const hw  = (TRACK_WIDTH * 0.5) + 0.3;
+        pts.push(new THREE.Vector3(
+          p.x + bin.x * hw * mult,
+          0.12,
+          p.z + bin.z * hw * mult
+        ));
+      }
 
-    // F1 TORQUE/ACCEL CURVE
-    // Logic: Higher torque at low speeds, air resistance at high speeds.
-    if (keys['w'] || keys['arrowup']) {
-        const powerFactor = Math.max(0.2, 1.0 - (velocity / topSpeed));
-        velocity += 0.16 * powerFactor; // 0-100 in ~2.5s
-    } else if (keys['s'] || keys['arrowdown']) {
-        velocity -= 0.4; // Massive F1 braking
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+      const lineMat = new THREE.LineBasicMaterial({
+        color: 0xffffff,
+        opacity: 0.35,
+        transparent: true
+      });
+      group.add(new THREE.Line(lineGeo, lineMat));
+    });
+
+    return group;
+  }
+
+  // Build start/finish line
+  function buildStartLine(curve) {
+    const p0 = curve.getPointAt(0);
+    const frames = curve.computeFrenetFrames(TRACK_SEGMENTS, true);
+    const bin = frames.binormals[0];
+
+    const pts = [
+      new THREE.Vector3(p0.x + bin.x * TRACK_WIDTH * 0.5, 0.08, p0.z + bin.z * TRACK_WIDTH * 0.5),
+      new THREE.Vector3(p0.x - bin.x * TRACK_WIDTH * 0.5, 0.08, p0.z - bin.z * TRACK_WIDTH * 0.5)
+    ];
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const mat = new THREE.LineBasicMaterial({ color: 0xffffff, opacity: 0.9, transparent: true });
+    return new THREE.Line(geo, mat);
+  }
+
+  // Public API
+  function build() {
+    const rawPoints   = parseKML(KML_RAW);
+    const scaledPoints = scaleToRealLength(rawPoints);
+
+    const curve = new THREE.CatmullRomCurve3(scaledPoints, true);
+    curve.curveType = 'centripetal';
+
+    const roadMesh  = buildRoadMesh(curve);
+    const edgeLines = buildEdgeLines(curve);
+    const startLine = buildStartLine(curve);
+
+    scene.add(roadMesh);
+    scene.add(edgeLines);
+    scene.add(startLine);
+
+    return { curve };
+  }
+
+  return { build };
+})();
+
+// ================================================================
+//  CAR MODEL — low-poly F1 car, slowroads.io clean geometry style
+// ================================================================
+const CarModel = (() => {
+  function build() {
+    const group = new THREE.Group();
+
+    // ---- Colour palette ----
+    const bodyMat  = new THREE.MeshLambertMaterial({ color: 0xd0001e }); // Ferrari red
+    const darkMat  = new THREE.MeshLambertMaterial({ color: 0x111318 });
+    const tyreMat  = new THREE.MeshLambertMaterial({ color: 0x1a1a1f });
+    const rimMat   = new THREE.MeshLambertMaterial({ color: 0xc8c8cc });
+    const cockpitMat = new THREE.MeshLambertMaterial({ color: 0x0a0c12 });
+    const haloMat  = new THREE.MeshLambertMaterial({ color: 0xd4aa10 });
+    const noseCapMat = new THREE.MeshLambertMaterial({ color: 0x111318 });
+
+    // -- Main body (tapered wedge shape) --
+    const bodyGeo = new THREE.BoxGeometry(1.8, 0.38, 4.2);
+    // Move back so nose extends forward
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.set(0, 0.32, 0.1);
+    group.add(body);
+
+    // -- Nose cone (tapered) --
+    const noseGeo = new THREE.CylinderGeometry(0.12, 0.4, 1.6, 6);
+    const nose = new THREE.Mesh(noseGeo, bodyMat);
+    nose.rotation.z = Math.PI / 2;
+    nose.position.set(0, 0.28, -2.5);
+    group.add(nose);
+    // Nose cap
+    const noseCap = new THREE.Mesh(new THREE.SphereGeometry(0.13, 6, 5), noseCapMat);
+    noseCap.position.set(0, 0.28, -3.3);
+    group.add(noseCap);
+
+    // -- Sidepods --
+    [-0.72, 0.72].forEach(sx => {
+      const pod = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.3, 1.8), bodyMat);
+      pod.position.set(sx, 0.18, 0.6);
+      group.add(pod);
+    });
+
+    // -- Cockpit surround --
+    const cockpitGeo = new THREE.BoxGeometry(0.68, 0.32, 0.9);
+    const cockpit = new THREE.Mesh(cockpitGeo, darkMat);
+    cockpit.position.set(0, 0.58, 0.3);
+    group.add(cockpit);
+
+    // -- Halo safety structure --
+    const haloGeo = new THREE.TorusGeometry(0.34, 0.035, 5, 12, Math.PI);
+    const halo = new THREE.Mesh(haloGeo, haloMat);
+    halo.position.set(0, 0.78, 0.25);
+    halo.rotation.y = Math.PI / 2;
+    group.add(halo);
+    // Halo centre pillar
+    const haloPillar = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.22, 5), haloMat);
+    haloPillar.position.set(0, 0.86, -0.05);
+    group.add(haloPillar);
+
+    // -- Rear wing --
+    const rearWingMain = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.06, 0.38), darkMat);
+    rearWingMain.position.set(0, 0.88, 2.1);
+    group.add(rearWingMain);
+    const rearWingFlap = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.05, 0.28), bodyMat);
+    rearWingFlap.position.set(0, 0.98, 2.05);
+    group.add(rearWingFlap);
+    // Endplates
+    [-0.95, 0.95].forEach(sx => {
+      const ep = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.38, 0.44), darkMat);
+      ep.position.set(sx, 0.82, 2.1);
+      group.add(ep);
+    });
+    // Rear wing support struts
+    const strutGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.55, 4);
+    [-0.3, 0.3].forEach(sx => {
+      const strut = new THREE.Mesh(strutGeo, darkMat);
+      strut.position.set(sx, 0.62, 2.12);
+      group.add(strut);
+    });
+
+    // -- Front wing --
+    const fwMain = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.04, 0.32), darkMat);
+    fwMain.position.set(0, 0.12, -3.0);
+    group.add(fwMain);
+    const fwFlap = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.035, 0.22), bodyMat);
+    fwFlap.position.set(0, 0.17, -3.06);
+    group.add(fwFlap);
+    // Front wing endplates
+    [-0.8, 0.8].forEach(sx => {
+      const fwEp = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.22, 0.36), darkMat);
+      fwEp.position.set(sx, 0.12, -3.0);
+      group.add(fwEp);
+    });
+
+    // -- Engine cover / airbox --
+    const airbox = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.22, 0.55, 6), darkMat);
+    airbox.position.set(0, 0.82, 0.8);
+    group.add(airbox);
+
+    // -- Wheels (4x) --
+    const wheelPositions = [
+      { x: -0.92, z: -1.65, front: true  },
+      { x:  0.92, z: -1.65, front: true  },
+      { x: -0.92, z:  1.55, front: false },
+      { x:  0.92, z:  1.55, front: false },
+    ];
+
+    const wheelObjects = [];
+    wheelPositions.forEach(wp => {
+      const wr = wp.front ? 0.28 : 0.30;
+      const ww = wp.front ? 0.24 : 0.32;
+      const wGeo = new THREE.CylinderGeometry(wr, wr, ww, 16);
+      const wheel = new THREE.Mesh(wGeo, tyreMat);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(wp.x, wr, wp.z);
+      group.add(wheel);
+      wheelObjects.push(wheel);
+
+      // Rim
+      const rimGeo = new THREE.CylinderGeometry(wr * 0.62, wr * 0.62, ww + 0.02, 12);
+      const rim = new THREE.Mesh(rimGeo, rimMat);
+      rim.rotation.z = Math.PI / 2;
+      rim.position.copy(wheel.position);
+      group.add(rim);
+
+      // Suspension arm
+      const armLen = Math.abs(wp.x) - 0.9;
+      const armGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.55, 4);
+      const arm = new THREE.Mesh(armGeo, darkMat);
+      arm.rotation.z = Math.PI / 2;
+      arm.position.set(wp.x * 0.5, wr * 0.7, wp.z);
+      group.add(arm);
+    });
+
+    return { group, wheelObjects };
+  }
+
+  return { build };
+})();
+
+// ================================================================
+//  PHYSICS CONTROLLER — F1-spec, speed-sensitive, stable
+// ================================================================
+const PhysicsController = (() => {
+  const state = {
+    velocity:    0,         // sim units / frame (scaled to real m/s-ish)
+    heading:     0,         // radians
+    wheelAngle:  0,         // visual wheel steer angle
+    throttle:    0,         // 0–1 (for HUD)
+    braking:     0,         // 0–1 (for HUD)
+    gear:        1,
+    lapProgress: 0,         // 0–1 around the circuit
+    lapTime:     0,         // seconds
+    lapCount:    0,
+    onTrack:     true,
+  };
+
+  // Gear ratios approximate F1 — used for gear display & audio hint
+  const GEAR_SPEED_THRESHOLDS = [0, 8, 20, 35, 53, 70, 85]; // sim units
+
+  function calcGear(v) {
+    for (let g = GEAR_SPEED_THRESHOLDS.length - 1; g >= 1; g--) {
+      if (v >= GEAR_SPEED_THRESHOLDS[g]) return g;
+    }
+    return 1;
+  }
+
+  function update(keys, dt) {
+    // dt clamped to avoid spiral of death
+    const dtClamped = Math.min(dt, 0.05);
+
+    const vNorm = state.velocity / CAR_TOP_SPEED_MS;
+
+    // ---- ACCELERATION (non-linear torque curve) ----
+    state.throttle = 0;
+    if (keys.throttle) {
+      state.throttle = 1;
+      // High torque at low speed, reduces with drag
+      const torqueFactor  = Math.pow(1.0 - vNorm * 0.85, 1.4);
+      const dragFactor    = Math.pow(vNorm, 2) * 0.6;
+      const accel         = (8.0 * torqueFactor - dragFactor) * dtClamped;
+      state.velocity      = Math.min(state.velocity + accel, CAR_TOP_SPEED_MS);
+    }
+
+    // ---- BRAKING (F1-spec: much stronger than accel) ----
+    state.braking = 0;
+    if (keys.brake) {
+      state.braking  = 1;
+      const bForce   = (state.velocity > 5) ? 28.0 : 10.0;
+      state.velocity = Math.max(0, state.velocity - bForce * dtClamped);
+    }
+
+    // ---- COAST / ENGINE DRAG ----
+    if (!keys.throttle && !keys.brake) {
+      // Aerodynamic drag + engine braking
+      const drag = (0.18 + vNorm * 0.35) * dtClamped;
+      state.velocity = Math.max(0, state.velocity - drag * state.velocity * 0.06);
+    }
+
+    // ---- STEERING (speed-sensitive) ----
+    // At low speed: very responsive. At high speed: very stable.
+    const maxSteer    = 0.048;
+    const speedDamp   = Math.max(0.18, 1.0 - vNorm * 0.72);
+    const steerRate   = maxSteer * speedDamp;
+    const steerReturn = 0.88; // how fast wheel self-centres
+
+    if (keys.left  && state.velocity > 0.2) {
+      state.heading  += steerRate;
+      state.wheelAngle = Math.min(state.wheelAngle + 0.08, 0.45);
+    } else if (keys.right && state.velocity > 0.2) {
+      state.heading  -= steerRate;
+      state.wheelAngle = Math.max(state.wheelAngle - 0.08, -0.45);
     } else {
-        velocity *= 0.992; // Engine braking & Drag
+      state.wheelAngle *= steerReturn;
     }
 
-    velocity = Math.max(0, Math.min(topSpeed, velocity));
+    // ---- UPDATE GEAR ----
+    state.gear = calcGear(state.velocity);
 
-    // Dynamic Steering (Sharper at low speeds)
-    const turnSensitivity = Math.max(0.2, 1.2 - (velocity / topSpeed) * 0.8);
-    if (velocity > 0.1) {
-        if (keys['a'] || keys['arrowleft']) car.rotation.y += 0.045 * turnSensitivity;
-        if (keys['d'] || keys['arrowright']) car.rotation.y -= 0.045 * turnSensitivity;
-    }
+    return state;
+  }
 
-    car.position.x -= Math.sin(car.rotation.y) * (velocity * 0.15);
-    car.position.z -= Math.cos(car.rotation.y) * (velocity * 0.15);
+  return { update, state };
+})();
 
-    // Speedometer UI
-    const kmph = Math.floor(velocity * 4); 
-    speedo.innerText = `${kmph} KM/H`;
+// ================================================================
+//  CAMERA SYSTEM — smooth chase + free cam with pointer lock
+// ================================================================
+const CameraSystem = (() => {
+  let mode = 'chase'; // 'chase' | 'free'
 
-    // High Speed Camera Follow
-    const camDist = 18 + (velocity * 0.1);
-    const targetCam = new THREE.Vector3(
-        car.position.x + Math.sin(car.rotation.y) * camDist,
-        car.position.y + 7,
-        car.position.z + Math.cos(car.rotation.y) * camDist
+  // Chase cam state
+  const chaseState = {
+    pos:    new THREE.Vector3(),
+    target: new THREE.Vector3(),
+  };
+
+  // Free cam state
+  const freeState = {
+    pos:   new THREE.Vector3(),
+    yaw:   0,
+    pitch: 0,
+    keys:  {},
+  };
+
+  let isPointerLocked = false;
+
+  // Init free cam to match current car position/heading
+  function initFreeFromCar(carGroup) {
+    freeState.pos.copy(mainCamera.position);
+    // Extract yaw from camera's current look direction
+    const dir = new THREE.Vector3();
+    mainCamera.getWorldDirection(dir);
+    freeState.yaw   = Math.atan2(-dir.x, -dir.z);
+    freeState.pitch = Math.asin(dir.y);
+  }
+
+  function enablePointerLock() {
+    renderer.domElement.requestPointerLock();
+  }
+
+  document.addEventListener('pointerlockchange', () => {
+    isPointerLocked = document.pointerLockElement === renderer.domElement;
+  });
+
+  // Mouse look
+  document.addEventListener('mousemove', e => {
+    if (mode !== 'free' || !isPointerLocked) return;
+    const sens = 0.0018;
+    freeState.yaw   -= e.movementX * sens;
+    freeState.pitch -= e.movementY * sens;
+    freeState.pitch  = Math.max(-Math.PI * 0.48, Math.min(Math.PI * 0.48, freeState.pitch));
+  });
+
+  // Mouse buttons — move toward/away from look direction
+  document.addEventListener('mousedown', e => {
+    if (mode !== 'free' || !isPointerLocked) return;
+    if (e.button === 0) freeState.keys['fly_forward']  = true;
+    if (e.button === 2) freeState.keys['fly_backward'] = true;
+    e.preventDefault();
+  });
+  document.addEventListener('mouseup', e => {
+    freeState.keys['fly_forward']  = false;
+    freeState.keys['fly_backward'] = false;
+  });
+  document.addEventListener('contextmenu', e => e.preventDefault());
+
+  // Free cam keyboard
+  document.addEventListener('keydown', e => {
+    freeState.keys[e.key.toLowerCase()] = true;
+    freeState.keys[e.code] = true;
+  });
+  document.addEventListener('keyup', e => {
+    freeState.keys[e.key.toLowerCase()] = false;
+    freeState.keys[e.code] = false;
+  });
+
+  function updateChase(carGroup, velocity) {
+    const vNorm = velocity / CAR_TOP_SPEED_MS;
+
+    // Distance increases with speed — immersive feel
+    const dist   = 20 + vNorm * 14;
+    const height = 5  + vNorm * 2.5;
+
+    const carPos = carGroup.position;
+    const carYaw = carGroup.rotation.y;
+
+    const targetPos = new THREE.Vector3(
+      carPos.x + Math.sin(carYaw) * dist,
+      carPos.y + height,
+      carPos.z + Math.cos(carYaw) * dist
     );
-    camera.position.lerp(targetCam, 0.15);
-    camera.lookAt(car.position.x, car.position.y + 1, car.position.z);
 
-    renderer.render(scene, camera);
+    // Smooth lerp with speed-adjusted responsiveness
+    const lerpFactor = 0.08 + vNorm * 0.05;
+    mainCamera.position.lerp(targetPos, lerpFactor);
+
+    // Look at a point slightly above car
+    const lookTarget = new THREE.Vector3(carPos.x, carPos.y + 0.8, carPos.z);
+    chaseState.target.lerp(lookTarget, 0.12);
+    mainCamera.lookAt(chaseState.target);
+  }
+
+  function updateFree(dt) {
+    const speed = freeState.keys['shift'] ? 120 : 30;
+    const move  = speed * dt;
+
+    // Build orientation quaternion from yaw/pitch
+    const qYaw   = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), freeState.yaw);
+    const qPitch = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0), freeState.pitch);
+    const qOrient = qYaw.multiply(qPitch);
+
+    // Forward/right/up vectors
+    const forward = new THREE.Vector3(0,0,-1).applyQuaternion(qOrient);
+    const right   = new THREE.Vector3(1,0, 0).applyQuaternion(qOrient);
+    const up      = new THREE.Vector3(0,1, 0);
+
+    const k = freeState.keys;
+    if (k['w'] || k['arrowup']    || k['fly_forward'])  freeState.pos.addScaledVector(forward, move);
+    if (k['s'] || k['arrowdown']  || k['fly_backward']) freeState.pos.addScaledVector(forward, -move);
+    if (k['a'] || k['arrowleft'])  freeState.pos.addScaledVector(right, -move);
+    if (k['d'] || k['arrowright']) freeState.pos.addScaledVector(right,  move);
+    if (k['q']) freeState.pos.addScaledVector(up, -move);
+    if (k['e']) freeState.pos.addScaledVector(up,  move);
+
+    mainCamera.position.copy(freeState.pos);
+    mainCamera.quaternion.copy(qOrient);
+  }
+
+  function toggleMode(carGroup) {
+    if (mode === 'chase') {
+      mode = 'free';
+      initFreeFromCar(carGroup);
+      enablePointerLock();
+      document.getElementById('cam-indicator').textContent = 'CAM: FREE';
+      document.getElementById('top-bar').textContent = 'SILVERSTONE GP · FREE CAMERA';
+    } else {
+      mode = 'chase';
+      document.exitPointerLock();
+      document.getElementById('cam-indicator').textContent = 'CAM: CHASE';
+      document.getElementById('top-bar').textContent = 'SILVERSTONE GP · FOLLOW CAM';
+    }
+  }
+
+  function update(carGroup, velocity, dt) {
+    if (mode === 'chase') updateChase(carGroup, velocity);
+    else updateFree(dt);
+  }
+
+  return { update, toggleMode, get mode() { return mode; } };
+})();
+
+// ================================================================
+//  INPUT HANDLER — unified keyboard state
+// ================================================================
+const InputHandler = (() => {
+  const keys = {
+    throttle: false,
+    brake:    false,
+    left:     false,
+    right:    false,
+  };
+
+  document.addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if (k === 'w' || k === 'arrowup')    keys.throttle = true;
+    if (k === 's' || k === 'arrowdown')  keys.brake    = true;
+    if (k === 'a' || k === 'arrowleft')  keys.left     = true;
+    if (k === 'd' || k === 'arrowright') keys.right    = true;
+    if (k === 't') CameraSystem.toggleMode(car.group);
+    if (k === 'r') resetCar();
+  });
+
+  document.addEventListener('keyup', e => {
+    const k = e.key.toLowerCase();
+    if (k === 'w' || k === 'arrowup')    keys.throttle = false;
+    if (k === 's' || k === 'arrowdown')  keys.brake    = false;
+    if (k === 'a' || k === 'arrowleft')  keys.left     = false;
+    if (k === 'd' || k === 'arrowright') keys.right    = false;
+  });
+
+  return { keys };
+})();
+
+// ================================================================
+//  HUD SYSTEM
+// ================================================================
+const HUDSystem = (() => {
+  const speedEl    = document.getElementById('speed-value');
+  const gearEl     = document.getElementById('gear-value');
+  const lapEl      = document.getElementById('lap-value');
+  const throttleEl = document.getElementById('throttle-fill');
+  const brakeEl    = document.getElementById('brake-fill');
+
+  const GEAR_NAMES = ['', '1', '2', '3', '4', '5', '6', '7', '8'];
+
+  function formatLap(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    const t = Math.floor((seconds % 1) * 10);
+    return `${m}:${String(s).padStart(2,'0')}.${t}`;
+  }
+
+  function update(state) {
+    const kmh = Math.floor(state.velocity * 3.6);
+    speedEl.textContent    = kmh;
+    gearEl.textContent     = state.velocity < 0.5 ? 'N' : (GEAR_NAMES[state.gear] || '8');
+    lapEl.textContent      = formatLap(state.lapTime);
+    throttleEl.style.width = (state.throttle * 100) + '%';
+    brakeEl.style.width    = (state.braking  * 100) + '%';
+  }
+
+  return { update };
+})();
+
+// ================================================================
+//  MINIMAP
+// ================================================================
+const Minimap = (() => {
+  const canvas  = document.getElementById('minimap');
+  const ctx     = canvas.getContext('2d');
+  let trackPts  = [];
+  let bbox      = { minX: 0, maxX: 0, minZ: 0, maxZ: 0 };
+
+  function init(curve) {
+    const count = 300;
+    trackPts = [];
+    for (let i = 0; i < count; i++) {
+      const p = curve.getPointAt(i / count);
+      trackPts.push({ x: p.x, z: p.z });
+    }
+    bbox.minX = Math.min(...trackPts.map(p => p.x));
+    bbox.maxX = Math.max(...trackPts.map(p => p.x));
+    bbox.minZ = Math.min(...trackPts.map(p => p.z));
+    bbox.maxZ = Math.max(...trackPts.map(p => p.z));
+  }
+
+  function toCanvas(wx, wz) {
+    const pad = 12;
+    const cw = canvas.width  - pad * 2;
+    const ch = canvas.height - pad * 2;
+    const rx = (wx - bbox.minX) / (bbox.maxX - bbox.minX);
+    const rz = (wz - bbox.minZ) / (bbox.maxZ - bbox.minZ);
+    return { cx: pad + rx * cw, cy: pad + rz * ch };
+  }
+
+  function update(carX, carZ) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Track outline
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth   = 2.5;
+    trackPts.forEach((p, i) => {
+      const { cx, cy } = toCanvas(p.x, p.z);
+      i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+    });
+    ctx.closePath();
+    ctx.stroke();
+
+    // Car dot
+    const { cx, cy } = toCanvas(carX, carZ);
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff3a3a';
+    ctx.fill();
+  }
+
+  return { init, update };
+})();
+
+// ================================================================
+//  LAP TIMING — simple progress-based detection
+// ================================================================
+const LapTimer = (() => {
+  let lastT      = 0;
+  let lapTime    = 0;
+  let lapCount   = 0;
+  let lapStarted = false;
+
+  function update(physState, curveT, dt) {
+    if (!lapStarted && curveT > 0.05) lapStarted = true;
+
+    if (lapStarted) lapTime += dt;
+
+    // Detect crossing start/finish (t crosses from ~0.97 → 0.03)
+    if (lapStarted && lastT > 0.9 && curveT < 0.1) {
+      lapCount++;
+      lapTime = 0;
+    }
+
+    lastT = curveT;
+    physState.lapTime  = lapTime;
+    physState.lapCount = lapCount;
+  }
+
+  return { update };
+})();
+
+// ================================================================
+//  WHEEL ROTATION ANIMATION
+// ================================================================
+function animateWheels(wheelObjs, velocity, dt) {
+  const rotSpeed = velocity * 0.55; // rotations per frame
+  wheelObjs.forEach(w => {
+    w.rotation.x += rotSpeed * dt;
+  });
 }
+
+// ================================================================
+//  ASSEMBLE SCENE
+// ================================================================
+let track, car;
+
+function buildScene() {
+  track = TrackSystem.build();
+
+  const carBuilt = CarModel.build();
+  car = { group: carBuilt.group, wheels: carBuilt.wheelObjects };
+  scene.add(car.group);
+
+  // Place car at circuit start
+  const startPos = track.curve.getPointAt(0);
+  car.group.position.set(startPos.x, 0.01, startPos.z);
+
+  // Orient car along track direction
+  const startTangent = track.curve.getTangentAt(0);
+  car.group.rotation.y = Math.atan2(-startTangent.x, -startTangent.z);
+  PhysicsController.state.heading = car.group.rotation.y;
+
+  // Minimap init
+  Minimap.init(track.curve);
+
+  // Chase cam initial position
+  mainCamera.position.set(startPos.x, 30, startPos.z + 40);
+  mainCamera.lookAt(startPos);
+}
+
+function resetCar() {
+  const startPos = track.curve.getPointAt(0);
+  car.group.position.set(startPos.x, 0.01, startPos.z);
+  const t = track.curve.getTangentAt(0);
+  car.group.rotation.y = Math.atan2(-t.x, -t.z);
+  PhysicsController.state.velocity = 0;
+  PhysicsController.state.heading  = car.group.rotation.y;
+}
+
+buildScene();
+
+// ================================================================
+//  GAME LOOP
+// ================================================================
+let lastTime = performance.now();
+
+// Closest-point-on-curve estimator (for lap tracking)
+// Uses a coarse scan then refines — runs once per frame, cheap
+function estimateCurveT(position, curve) {
+  const COARSE = 100;
+  let best = 0, bestDist = Infinity;
+  for (let i = 0; i < COARSE; i++) {
+    const t  = i / COARSE;
+    const p  = curve.getPointAt(t);
+    const d  = position.distanceToSquared(p);
+    if (d < bestDist) { bestDist = d; best = t; }
+  }
+  return best;
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  const now = performance.now();
+  const dt  = Math.min((now - lastTime) / 1000, 0.05);
+  lastTime  = now;
+
+  // ---- Physics ----
+  const pState = PhysicsController.update(InputHandler.keys, dt);
+
+  // ---- Move car ----
+  car.group.rotation.y = pState.heading;
+  car.group.position.x -= Math.sin(pState.heading) * pState.velocity * dt;
+  car.group.position.z -= Math.cos(pState.heading) * pState.velocity * dt;
+
+  // ---- Wheel animation ----
+  animateWheels(car.wheels, pState.velocity, dt);
+
+  // ---- Lap timing ----
+  const curveT = estimateCurveT(car.group.position, track.curve);
+  LapTimer.update(pState, curveT, dt);
+
+  // ---- Camera ----
+  CameraSystem.update(car.group, pState.velocity, dt);
+
+  // ---- HUD ----
+  HUDSystem.update(pState);
+
+  // ---- Minimap ----
+  Minimap.update(car.group.position.x, car.group.position.z);
+
+  // ---- Render ----
+  renderer.render(scene, mainCamera);
+}
+
+// ================================================================
+//  DISMISS LOADING SCREEN
+// ================================================================
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    const loading = document.getElementById('loading');
+    loading.style.opacity = '0';
+    setTimeout(() => loading.remove(), 900);
+  }, 1400);
+});
 
 animate();
-window.addEventListener("resize", () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-});
-
 </script>
 </body>
 </html>
