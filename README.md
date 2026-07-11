@@ -1,4 +1,4 @@
-# McPath
+# mcpath
 
 A browser-based 3D racing prototype built with **Three.js**, inspired by real-world Formula 1 circuits such as Silverstone.
 
